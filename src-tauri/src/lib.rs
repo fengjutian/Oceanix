@@ -40,6 +40,12 @@ pub fn run() {
             commands::ai_complete,
             commands::ai_chat,
             commands::ai_status,
+            commands::search_files,
+            commands::terminal_create,
+            commands::terminal_write,
+            commands::terminal_resize,
+            commands::terminal_kill,
+            commands::recent_projects,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Oceanix");

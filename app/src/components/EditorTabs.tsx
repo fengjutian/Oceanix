@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import Editor, { OnMount } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { aiComplete } from "../services/api";
@@ -30,40 +30,44 @@ export default function EditorTabs({
   onSave,
 }: EditorTabsProps) {
   const activeTab = tabs.find((t) => t.id === activeTabId);
+  const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
 
+  // Store the monaco instance so we can register providers later (e.g. on tab switch)
   const handleEditorMount: OnMount = useCallback(
     (_editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
-      // Register inline completion provider for AI completions
-      if (activeTab && monaco) {
-        const { languages } = monaco;
-        languages.registerInlineCompletionsProvider?.(
-          { language: activeTab.language },
-          {
-            provideInlineCompletions: async (_model, position) => {
-              try {
-                const code = _model.getValue();
-                const result = await aiComplete({
-                  code,
-                  position: { line: position.lineNumber, column: position.column },
-                  language: activeTab.language,
-                  filePath: activeTab.path,
-                });
-                if (result) {
-                  return {
-                    items: [{ insertText: result.insertText }],
-                  };
-                }
-              } catch {
-                // Silently fail — AI may not be available yet
-              }
-              return { items: [] };
-            },
-          }
-        );
-      }
+      monacoRef.current = monaco;
     },
-    [activeTab]
+    []
   );
+
+  // Re-register inline completions whenever the active tab's language changes
+  useEffect(() => {
+    if (!activeTab || !monacoRef.current) return;
+    const monaco = monacoRef.current;
+    const disposable = monaco.languages.registerInlineCompletionsProvider?.(
+      { language: activeTab.language },
+      {
+        provideInlineCompletions: async (model, position) => {
+          try {
+            const code = model.getValue();
+            const result = await aiComplete({
+              code,
+              position: { line: position.lineNumber, column: position.column },
+              language: activeTab.language,
+              filePath: activeTab.path,
+            });
+            if (result) {
+              return { items: [{ insertText: result.insertText }] };
+            }
+          } catch {
+            // Silently fail — AI may not be available yet
+          }
+          return { items: [] };
+        },
+      }
+    );
+    return () => disposable?.dispose();
+  }, [activeTab?.language, activeTab?.path]);
 
   return (
     <div className="editor-area">

@@ -1,7 +1,7 @@
 import { FileTree, FileNode } from "@oceanix/file-tree";
 import { EditorTab } from "./EditorTabs";
 import GitPanel, { GitFileStatus } from "./GitPanel";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 
 interface SidebarProps {
   view: string;
@@ -65,7 +65,23 @@ const DEMO_GIT_FILES: GitFileStatus[] = [
 
 export default function Sidebar({ view, onOpenFile }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults] = useState<Array<{ file: string; line: number; text: string }>>([]);
+  const [searchResults, setSearchResults] = useState<Array<{ file: string; line: number; text: string }>>([]);
+
+  const handleSearch = useCallback(async () => {
+    if (!searchQuery.trim()) { setSearchResults([]); return; }
+    try {
+      const { searchInFiles } = await import("../services/api");
+      const results = await searchInFiles({
+        query: searchQuery,
+        path: ".",
+        regex: false,
+        caseSensitive: false,
+      });
+      setSearchResults(results.map((r: { file: string; line: number; text: string }) => r));
+    } catch {
+      setSearchResults([]);
+    }
+  }, [searchQuery]);
 
   const handleOpenFile = (path: string) => {
     if (onOpenFile) {
@@ -100,7 +116,7 @@ export default function Sidebar({ view, onOpenFile }: SidebarProps) {
             }}
             placeholder="Search files..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); handleSearch(); }}
           />
           {searchResults.length > 0 && (
             <div style={{ marginTop: 8 }}>

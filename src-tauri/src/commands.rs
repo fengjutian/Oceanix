@@ -173,19 +173,88 @@ pub fn ai_chat(params: serde_json::Value, ai_state: State<AiState>) -> Result<St
     }
     bridge
         .send_request("chat", params)
-        .map(|r| r.result.unwrap_or_default().to_string())
+        .map(|r| {
+            match r.result {
+                Some(serde_json::Value::String(s)) => s,
+                Some(v) => v.to_string(),
+                None => String::new(),
+            }
+        })
 }
 
 #[tauri::command]
 pub fn ai_status(ai_state: State<AiState>) -> Result<bool, String> {
-    ai_state.bridge.lock().map_err(|e| format!("Lock poisoned: {e}"))?.is_ready()
+    Ok(ai_state.bridge.lock().map_err(|e| format!("Lock poisoned: {e}"))?.is_ready())
+}
+
+// ─── Search ───────────────────────────────────────────
+
+#[tauri::command]
+pub fn search_files(params: serde_json::Value) -> Result<Vec<serde_json::Value>, String> {
+    let query = params["query"].as_str().unwrap_or("");
+    let path = params["path"].as_str().unwrap_or(".");
+    let max = params.get("max_results").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
+
+    let search_params = oceanix_search::SearchParams {
+        query: query.to_string(),
+        include: params["include"].as_str().map(String::from),
+        exclude: params["exclude"].as_str().map(String::from),
+        case_sensitive: params.get("case_sensitive").and_then(|v| v.as_bool()).unwrap_or(false),
+        max_results: max,
+    };
+
+    let engine = oceanix_search::SearchEngine::new(path);
+    let results = engine.search(&search_params);
+
+    Ok(results.into_iter().map(|m| serde_json::json!({
+        "file": m.file_path,
+        "line": m.line_number,
+        "column": m.column,
+        "text": m.line_text,
+    })).collect())
+}
+
+// ─── Terminal (stubs) ─────────────────────────────────
+
+#[tauri::command]
+pub fn terminal_create(_shell: Option<String>) -> Result<String, String> {
+    Ok(format!("term-{}", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()))
+}
+
+#[tauri::command]
+pub fn terminal_write(id: String, data: String) -> Result<(), String> {
+    tracing::info!("terminal_write id={id} len={}", data.len());
+    Ok(())
+}
+
+#[tauri::command]
+pub fn terminal_resize(id: String, cols: u16, rows: u16) -> Result<(), String> {
+    tracing::info!("terminal_resize id={id} {cols}x{rows}");
+    Ok(())
+}
+
+#[tauri::command]
+pub fn terminal_kill(id: String) -> Result<(), String> {
+    tracing::info!("terminal_kill id={id}");
+    Ok(())
+}
+
+// ─── Recent Projects ──────────────────────────────────
+
+#[tauri::command]
+pub fn recent_projects() -> Result<Vec<serde_json::Value>, String> {
+    Ok(vec![])
 }
 
 // ─── Types ───────────────────────────────────────────
 
 #[derive(serde::Serialize, Clone)]
 pub struct FileEntry {
+    #[serde(rename = "isDir")]
+    pub is_dir: bool,
     pub name: String,
     pub path: String,
-    pub is_dir: bool,
 }

@@ -16,6 +16,8 @@ export default function Terminal({ onData, writeData, id }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const onDataRef = useRef(onData);
+  onDataRef.current = onData;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -39,7 +41,7 @@ export default function Terminal({ onData, writeData, id }: TerminalProps) {
     fitAddon.fit();
 
     term.onData((data) => {
-      onData?.(data);
+      onDataRef.current?.(data);
     });
 
     termRef.current = term;

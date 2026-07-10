@@ -29,3 +29,4 @@ oceanix-pty = { path = "../crates/oceanix-pty" }
 oceanix-git = { path = "../crates/oceanix-git" }
 oceanix-search = { path = "../crates/oceanix-search" }
 oceanix-ai = { path = "../crates/oceanix-ai" }
+oceanix-plugin = { path = "../crates/oceanix-plugin" }

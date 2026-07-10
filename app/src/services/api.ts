@@ -154,6 +154,29 @@ export async function lspDiagnostics(languageId: string): Promise<Array<{
   return invoke("lsp_diagnostics", { languageId });
 }
 
+// ─── Plugins ─────────────────────────────────────────
+
+export async function pluginList(): Promise<Array<{
+  name: string;
+  version: string;
+  displayName: string;
+  active: boolean;
+}>> {
+  return invoke("plugin_list");
+}
+
+export async function pluginContributions(): Promise<PluginContributions> {
+  return invoke("plugin_contributions");
+}
+
+export interface PluginContributions {
+  commands: Array<{ id: string; label: string; category?: string }>;
+  keybindings: Array<{ key: string; command: string; when?: string }>;
+  views: Array<{ id: string; label: string; location: string; icon?: string }>;
+  themes: Array<{ id: string; label: string; uiTheme: string; path: string }>;
+  settings: Array<{ id: string; label: string; type: string; default?: unknown; description?: string }>;
+}
+
 // ─── AI ──────────────────────────────────────────────
 
 export async function aiComplete(params: {

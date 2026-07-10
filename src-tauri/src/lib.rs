@@ -4,6 +4,7 @@ use commands::AiState;
 use std::sync::Mutex;
 use std::collections::HashMap;
 use oceanix_pty::PtySession;
+use oceanix_plugin::PluginRegistry;
 
 /// Oceanix: Next-generation code editor.
 /// Thin shell — delegates all logic to workspace crates.
@@ -20,6 +21,10 @@ pub struct PtyState {
 
 pub struct LspState {
     pub clients: Mutex<HashMap<String, oceanix_lsp::LspClient>>,
+}
+
+pub struct PluginState {
+    pub registry: Mutex<PluginRegistry>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -55,12 +60,18 @@ pub fn run() {
         clients: Mutex::new(HashMap::new()),
     };
 
+    // Plugin registry
+    let plugin_state = PluginState {
+        registry: Mutex::new(PluginRegistry::new()),
+    };
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .manage(ai_state)
         .manage(git_state)
         .manage(pty_state)
         .manage(lsp_state)
+        .manage(plugin_state)
         .invoke_handler(tauri::generate_handler![
             commands::greet,
             commands::file_read,
@@ -96,6 +107,8 @@ pub fn run() {
             commands::lsp_did_open,
             commands::lsp_did_change,
             commands::lsp_diagnostics,
+            commands::plugin_list,
+            commands::plugin_contributions,
             commands::get_cwd,
         ])
         .run(tauri::generate_context!())

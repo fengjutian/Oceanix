@@ -461,6 +461,20 @@ pub fn lsp_diagnostics(language_id: String, state: tauri::State<'_, crate::LspSt
     }).collect())
 }
 
+// ─── Plugin Registry ────────────────────────────────
+
+#[tauri::command]
+pub fn plugin_list(state: tauri::State<'_, crate::PluginState>) -> Result<Vec<oceanix_plugin::PluginInfo>, String> {
+    let registry = state.registry.lock().map_err(|e| format!("lock: {e}"))?;
+    Ok(registry.list())
+}
+
+#[tauri::command]
+pub fn plugin_contributions(state: tauri::State<'_, crate::PluginState>) -> Result<oceanix_plugin::Contributions, String> {
+    let registry = state.registry.lock().map_err(|e| format!("lock: {e}"))?;
+    Ok(registry.contributions().clone())
+}
+
 // ─── Types ───────────────────────────────────────────
 
 #[derive(serde::Serialize, Clone)]

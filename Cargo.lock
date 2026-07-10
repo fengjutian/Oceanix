@@ -2275,6 +2275,7 @@ dependencies = [
  "oceanix-ai",
  "oceanix-git",
  "oceanix-lsp",
+ "oceanix-plugin",
  "oceanix-pty",
  "oceanix-search",
  "serde",

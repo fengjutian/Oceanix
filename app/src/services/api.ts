@@ -156,12 +156,16 @@ export async function aiStreamChat(
 
 // ─── Terminal ────────────────────────────────────────
 
-export async function terminalCreate(shell?: string): Promise<string> {
+export async function terminalCreate(shell?: string): Promise<{ id: string; pid: number }> {
   return invoke("terminal_create", { shell });
 }
 
 export async function terminalWrite(id: string, data: string): Promise<void> {
   return invoke("terminal_write", { id, data });
+}
+
+export async function terminalRead(id: string): Promise<string> {
+  return invoke("terminal_read", { id });
 }
 
 export async function terminalResize(id: string, cols: number, rows: number): Promise<void> {

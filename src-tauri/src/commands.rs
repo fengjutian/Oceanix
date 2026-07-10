@@ -3,6 +3,7 @@
 
 use tauri::State;
 use std::sync::Mutex;
+use oceanix_pty::SpawnResult;
 
 // ─── AI Bridge State ────────────────────────────────
 
@@ -214,32 +215,36 @@ pub fn search_files(params: serde_json::Value) -> Result<Vec<serde_json::Value>,
     })).collect())
 }
 
-// ─── Terminal (stubs) ─────────────────────────────────
+// ─── Terminal ────────────────────────────────────────
 
 #[tauri::command]
-pub fn terminal_create(_shell: Option<String>) -> Result<String, String> {
-    Ok(format!("term-{}", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis()))
+pub fn terminal_create(shell: Option<String>, state: tauri::State<'_, crate::PtyState>) -> Result<SpawnResult, String> {
+    let session = state.pty.lock().map_err(|e| format!("lock: {e}"))?;
+    session.spawn(shell.as_deref())
 }
 
 #[tauri::command]
-pub fn terminal_write(id: String, data: String) -> Result<(), String> {
-    tracing::info!("terminal_write id={id} len={}", data.len());
-    Ok(())
+pub fn terminal_write(id: String, data: String, state: tauri::State<'_, crate::PtyState>) -> Result<(), String> {
+    let session = state.pty.lock().map_err(|e| format!("lock: {e}"))?;
+    session.write(&id, &data)
 }
 
 #[tauri::command]
-pub fn terminal_resize(id: String, cols: u16, rows: u16) -> Result<(), String> {
-    tracing::info!("terminal_resize id={id} {cols}x{rows}");
-    Ok(())
+pub fn terminal_read(id: String, state: tauri::State<'_, crate::PtyState>) -> Result<String, String> {
+    let session = state.pty.lock().map_err(|e| format!("lock: {e}"))?;
+    session.read(&id)
 }
 
 #[tauri::command]
-pub fn terminal_kill(id: String) -> Result<(), String> {
-    tracing::info!("terminal_kill id={id}");
-    Ok(())
+pub fn terminal_resize(id: String, cols: u16, rows: u16, state: tauri::State<'_, crate::PtyState>) -> Result<(), String> {
+    let session = state.pty.lock().map_err(|e| format!("lock: {e}"))?;
+    session.resize(&id, cols, rows)
+}
+
+#[tauri::command]
+pub fn terminal_kill(id: String, state: tauri::State<'_, crate::PtyState>) -> Result<(), String> {
+    let session = state.pty.lock().map_err(|e| format!("lock: {e}"))?;
+    session.kill(&id)
 }
 
 // ─── Recent Projects ──────────────────────────────────

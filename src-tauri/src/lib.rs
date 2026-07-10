@@ -3,6 +3,7 @@ mod commands;
 use commands::AiState;
 use std::sync::Mutex;
 use oceanix_git::GitRepo;
+use oceanix_pty::PtySession;
 
 /// Oceanix: Next-generation code editor.
 /// Thin shell — delegates all logic to workspace crates.
@@ -11,6 +12,10 @@ use oceanix_git::GitRepo;
 
 pub struct GitState {
     pub repo: Mutex<Option<GitRepo>>,
+}
+
+pub struct PtyState {
+    pub pty: Mutex<PtySession>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -36,10 +41,16 @@ pub fn run() {
         ),
     };
 
+    // PTY session manager
+    let pty_state = PtyState {
+        pty: Mutex::new(PtySession::new()),
+    };
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .manage(ai_state)
         .manage(git_state)
+        .manage(pty_state)
         .invoke_handler(tauri::generate_handler![
             commands::greet,
             commands::file_read,
@@ -59,6 +70,7 @@ pub fn run() {
             commands::ai_status,
             commands::search_files,
             commands::terminal_create,
+            commands::terminal_read,
             commands::terminal_write,
             commands::terminal_resize,
             commands::terminal_kill,

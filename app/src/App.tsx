@@ -6,6 +6,8 @@ import ActivityBar from "./components/ActivityBar";
 import EditorTabs, { EditorTab } from "./components/EditorTabs";
 import Terminal from "./components/Terminal";
 import GitPanel from "./components/GitPanel";
+import ProblemsPanel from "./components/ProblemsPanel";
+import OutputPanel from "./components/OutputPanel";
 import { CommandPalette, Command, filterCommands } from "@oceanix/command-palette";
 import { KeybindingRegistry, KeyBinding } from "@oceanix/keybinding";
 import { applyTheme, DARK_THEME, LIGHT_THEME } from "@oceanix/theme";
@@ -29,6 +31,7 @@ function App() {
   const [sidebarView, setSidebarView] = useState("explorer");
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(true);
+  const [panelTab, setPanelTab] = useState<"terminal" | "problems" | "output">("terminal");
   const [showPalette, setShowPalette] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [projectRoot, setProjectRoot] = useState(".");
@@ -287,12 +290,21 @@ function App() {
                   <Panel defaultSize={25} minSize={10} maxSize={50}>
                     <div className="panel-container">
                       <div className="panel-tabs">
-                        <span className="panel-tab active">TERMINAL</span>
-                        <span className="panel-tab">PROBLEMS</span>
-                        <span className="panel-tab">OUTPUT</span>
+                        {(["terminal", "problems", "output"] as const).map((tab) => (
+                          <span
+                            key={tab}
+                            className={`panel-tab ${panelTab === tab ? "active" : ""}`}
+                            onClick={() => setPanelTab(tab)}
+                            style={{ cursor: "pointer" }}
+                          >
+                            {tab.toUpperCase()}
+                          </span>
+                        ))}
                       </div>
                       <div className="panel-content">
-                        <Terminal id="main" />
+                        {panelTab === "terminal" && <Terminal id="main" />}
+                        {panelTab === "problems" && <ProblemsPanel />}
+                        {panelTab === "output" && <OutputPanel />}
                       </div>
                     </div>
                   </Panel>

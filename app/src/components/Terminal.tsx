@@ -2,22 +2,18 @@ import { useEffect, useRef } from "react";
 import { Terminal as XTerm } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
+import { terminalCreate, terminalWrite, terminalRead, terminalKill, terminalResize } from "../services/api";
 
 interface TerminalProps {
-  /** Called when user types in the terminal */
-  onData?: (data: string) => void;
-  /** External data to write to the terminal */
-  writeData?: string;
-  /** Terminal ID for multiplexing */
   id?: string;
 }
 
-export default function Terminal({ onData, writeData, id }: TerminalProps) {
+export default function Terminal({ id }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const onDataRef = useRef(onData);
-  onDataRef.current = onData;
+  const termIdRef = useRef<string | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -40,33 +36,74 @@ export default function Terminal({ onData, writeData, id }: TerminalProps) {
     term.open(containerRef.current);
     fitAddon.fit();
 
-    term.onData((data) => {
-      onDataRef.current?.(data);
-    });
-
     termRef.current = term;
     fitAddonRef.current = fitAddon;
 
     const handleResize = () => fitAddon.fit();
     window.addEventListener("resize", handleResize);
 
-    // Initial welcome message
-    term.writeln("Oceanix Terminal — Phase 2");
-    term.writeln("");
-    term.write("$ ");
+    // Set up PTY connection
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const result = await terminalCreate();
+        if (cancelled) return;
+        termIdRef.current = result.id;
+
+        // Poll for PTY output
+        pollTimerRef.current = setInterval(async () => {
+          if (cancelled) return;
+          try {
+            const data = await terminalRead(result.id);
+            if (data && termRef.current) {
+              termRef.current.write(data);
+            }
+          } catch {
+            // Ignore read errors
+          }
+        }, 50); // Poll every 50ms
+
+        // Forward user input to PTY
+        term.onData((data) => {
+          if (!cancelled && termIdRef.current) {
+            terminalWrite(termIdRef.current, data).catch(() => {});
+          }
+        });
+
+        // Handle terminal resize
+        const resizeObserver = new ResizeObserver(() => {
+          if (termRef.current && fitAddonRef.current) {
+            fitAddonRef.current.fit();
+            // Tauri PTY resize
+            if (termIdRef.current && termRef.current) {
+              const dims = fitAddon.proposeDimensions();
+              if (dims?.cols && dims?.rows) {
+                terminalResize(termIdRef.current, dims.cols, dims.rows).catch(() => {});
+              }
+            }
+          }
+        });
+        if (containerRef.current) {
+          resizeObserver.observe(containerRef.current);
+        }
+      } catch (err) {
+        if (!cancelled && termRef.current) {
+          termRef.current.writeln(`Failed to start terminal: ${err}`);
+        }
+      }
+    })();
 
     return () => {
+      cancelled = true;
       window.removeEventListener("resize", handleResize);
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      if (termIdRef.current) {
+        terminalKill(termIdRef.current).catch(() => {});
+      }
       term.dispose();
     };
   }, [id]);
-
-  // Handle external data writes
-  useEffect(() => {
-    if (writeData && termRef.current) {
-      termRef.current.write(writeData);
-    }
-  }, [writeData]);
 
   return (
     <div

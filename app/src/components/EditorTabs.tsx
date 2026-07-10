@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import Editor, { OnMount } from "@monaco-editor/react";
+import Editor, { OnMount, DiffEditor } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { aiComplete } from "../services/api";
 
@@ -19,6 +19,7 @@ interface EditorTabsProps {
   onCloseTab: (id: string) => void;
   onContentChange: (id: string, content: string) => void;
   onSave: (id: string) => void;
+  editorRef?: React.MutableRefObject<editor.IStandaloneCodeEditor | null>;
 }
 
 export default function EditorTabs({
@@ -28,16 +29,22 @@ export default function EditorTabs({
   onCloseTab,
   onContentChange,
   onSave,
+  editorRef,
 }: EditorTabsProps) {
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
+  const [splitMode, setSplitMode] = useState<"markdown" | null>(null);
+  const [diffOriginal, setDiffOriginal] = useState("");
+  const [diffModified, setDiffModified] = useState("");
+  const [showDiff, setShowDiff] = useState(false);
 
   // Store the monaco instance so we can register providers later (e.g. on tab switch)
   const handleEditorMount: OnMount = useCallback(
-    (_editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
+    (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
       monacoRef.current = monaco;
+      if (editorRef) editorRef.current = editor;
     },
-    []
+    [editorRef]
   );
 
   // Re-register inline completions whenever the active tab's language changes

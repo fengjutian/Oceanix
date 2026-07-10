@@ -8,6 +8,8 @@ import Terminal from "./components/Terminal";
 import GitPanel from "./components/GitPanel";
 import ProblemsPanel from "./components/ProblemsPanel";
 import OutputPanel from "./components/OutputPanel";
+import SettingsPanel from "./components/SettingsPanel";
+import type { editor } from "monaco-editor";
 import { CommandPalette, Command, filterCommands } from "@oceanix/command-palette";
 import { KeybindingRegistry, KeyBinding } from "@oceanix/keybinding";
 import { applyTheme, DARK_THEME, LIGHT_THEME } from "@oceanix/theme";
@@ -25,6 +27,7 @@ const DEFAULT_BINDINGS: KeyBinding[] = [
   { key: "Ctrl+B", command: "sidebar.toggle", label: "Toggle Sidebar" },
   { key: "Ctrl+J", command: "panel.toggle", label: "Toggle Panel" },
   { key: "Ctrl+K Ctrl+T", command: "theme.toggle", label: "Toggle Theme" },
+  { key: "Shift+Alt+F", command: "editor.format", label: "Format Document" },
 ];
 
 function App() {
@@ -33,8 +36,10 @@ function App() {
   const [panelVisible, setPanelVisible] = useState(true);
   const [panelTab, setPanelTab] = useState<"terminal" | "problems" | "output">("terminal");
   const [showPalette, setShowPalette] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [projectRoot, setProjectRoot] = useState(".");
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 
   // ─── Tab management ─────────────────────────────────
   const [tabs, setTabs] = useState<EditorTab[]>([]);
@@ -173,6 +178,22 @@ function App() {
       action: () => {},
     },
     {
+      id: "editor.format",
+      label: "Format Document",
+      category: "Editor",
+      keybinding: "Shift+Alt+F",
+      action: () => {
+        editorRef.current?.getAction("editor.action.formatDocument")?.run();
+      },
+    },
+    {
+      id: "settings.open",
+      label: "Open Settings",
+      category: "Preferences",
+      keybinding: "Ctrl+,",
+      action: () => setShowSettings(true),
+    },
+    {
       id: "search.global",
       label: "Global Search",
       category: "Search",
@@ -282,6 +303,7 @@ function App() {
                   onCloseTab={closeTab}
                   onContentChange={updateContent}
                   onSave={saveTab}
+                  editorRef={editorRef}
                 />
               </Panel>
               {panelVisible && (
@@ -329,6 +351,22 @@ function App() {
           placeholder="Type a command..."
           onClose={() => setShowPalette(false)}
         />
+      )}
+
+      {showSettings && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.5)", zIndex: 1000,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{
+            background: "var(--bg-primary)", border: "1px solid var(--border-color)",
+            borderRadius: 8, width: 480, maxHeight: "80vh", overflow: "auto",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+          }}>
+            <SettingsPanel onClose={() => setShowSettings(false)} />
+          </div>
+        </div>
       )}
     </div>
   );

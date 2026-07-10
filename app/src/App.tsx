@@ -9,7 +9,7 @@ import GitPanel from "./components/GitPanel";
 import { CommandPalette, Command, filterCommands } from "@oceanix/command-palette";
 import { KeybindingRegistry, KeyBinding } from "@oceanix/keybinding";
 import { applyTheme, DARK_THEME, LIGHT_THEME } from "@oceanix/theme";
-import { loadSession, saveSession, SessionState } from "./services/api";
+import { loadSession, saveSession, SessionState, getProjectRoot, writeFile } from "./services/api";
 
 const DEFAULT_BINDINGS: KeyBinding[] = [
   { key: "Ctrl+Shift+P", command: "palette.show", label: "Show Command Palette" },
@@ -31,6 +31,7 @@ function App() {
   const [panelVisible, setPanelVisible] = useState(true);
   const [showPalette, setShowPalette] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [projectRoot, setProjectRoot] = useState(".");
 
   // ─── Tab management ─────────────────────────────────
   const [tabs, setTabs] = useState<EditorTab[]>([]);
@@ -73,6 +74,40 @@ function App() {
     );
   }, []);
 
+  // ─── Auto-save ──────────────────────────────────────
+  const autoSaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const lastSavedContent = useRef<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    const dirtyTabs = tabs.filter((t) => t.dirty && t.path && !t.path.startsWith("untitled-"));
+    for (const tab of dirtyTabs) {
+      // Skip if already scheduled or content unchanged from last save
+      if (autoSaveTimers.current.has(tab.id)) continue;
+      if (lastSavedContent.current.get(tab.path) === tab.content) continue;
+
+      const timer = setTimeout(async () => {
+        try {
+          await writeFile(tab.path, tab.content);
+          lastSavedContent.current.set(tab.path, tab.content);
+          saveTab(tab.id);
+        } catch {
+          // File may not exist yet — skip
+        }
+        autoSaveTimers.current.delete(tab.id);
+      }, 1500); // 1.5s debounce
+
+      autoSaveTimers.current.set(tab.id, timer);
+    }
+
+    // Cleanup timers for closed tabs
+    for (const [id, timer] of autoSaveTimers.current) {
+      if (!dirtyTabs.find((t) => t.id === id)) {
+        clearTimeout(timer);
+        autoSaveTimers.current.delete(id);
+      }
+    }
+  }, [tabs]);
+
   // ─── Quick Open ─────────────────────────────────────
   const quickOpenCommands = useMemo<Command[]>(() => [
     {
@@ -87,7 +122,14 @@ function App() {
       label: "Save",
       category: "File",
       keybinding: "Ctrl+S",
-      action: () => activeTabId && saveTab(activeTabId),
+      action: () => {
+        if (!activeTabId) return;
+        const tab = tabs.find((t) => t.id === activeTabId);
+        if (tab && tab.path && !tab.path.startsWith("untitled-")) {
+          writeFile(tab.path, tab.content).catch(() => {});
+        }
+        saveTab(activeTabId);
+      },
     },
     {
       id: "file.new",
@@ -188,6 +230,8 @@ function App() {
         if (session.sidebarView) setSidebarView(session.sidebarView);
       }
     });
+    // Load project root from backend
+    getProjectRoot().then(setProjectRoot).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -219,6 +263,7 @@ function App() {
                 <Sidebar
                   view={sidebarView}
                   onOpenFile={openTab}
+                  projectRoot={projectRoot}
                 />
               </Panel>
               <PanelResizeHandle className="resize-handle" />

@@ -1,71 +1,160 @@
 import { FileTree, FileNode } from "@oceanix/file-tree";
 import { EditorTab } from "./EditorTabs";
 import GitPanel, { GitFileStatus } from "./GitPanel";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { readDir, gitStatus, gitBranchName, gitCommit } from "../services/api";
 
 interface SidebarProps {
   view: string;
   onOpenFile?: (tab: EditorTab) => void;
+  projectRoot: string;
 }
 
-const DEMO_FILES: FileNode = {
-  name: "oceanix",
-  path: "/oceanix",
-  type: "directory",
-  children: [
-    { name: "app", path: "/oceanix/app", type: "directory", children: [
-      { name: "src", path: "/oceanix/app/src", type: "directory", children: [
-        { name: "App.tsx", path: "/oceanix/app/src/App.tsx", type: "file", gitStatus: "modified" },
-        { name: "main.tsx", path: "/oceanix/app/src/main.tsx", type: "file" },
-        { name: "components", path: "/oceanix/app/src/components", type: "directory", children: [
-          { name: "EditorTabs.tsx", path: "/oceanix/app/src/components/EditorTabs.tsx", type: "file", gitStatus: "added" },
-          { name: "Terminal.tsx", path: "/oceanix/app/src/components/Terminal.tsx", type: "file", gitStatus: "added" },
-          { name: "GitPanel.tsx", path: "/oceanix/app/src/components/GitPanel.tsx", type: "file", gitStatus: "added" },
-        ]},
-      ]},
-      { name: "package.json", path: "/oceanix/app/package.json", type: "file", gitStatus: "modified" },
-      { name: "vite.config.ts", path: "/oceanix/app/vite.config.ts", type: "file" },
-    ]},
-    { name: "src-tauri", path: "/oceanix/src-tauri", type: "directory", children: [
-      { name: "src", path: "/oceanix/src-tauri/src", type: "directory", children: [
-        { name: "lib.rs", path: "/oceanix/src-tauri/src/lib.rs", type: "file", gitStatus: "modified" },
-        { name: "commands.rs", path: "/oceanix/src-tauri/src/commands.rs", type: "file", gitStatus: "modified" },
-        { name: "main.rs", path: "/oceanix/src-tauri/src/main.rs", type: "file" },
-      ]},
-      { name: "Cargo.toml", path: "/oceanix/src-tauri/Cargo.toml", type: "file", gitStatus: "modified" },
-    ]},
-    { name: "crates", path: "/oceanix/crates", type: "directory", children: [
-      { name: "oceanix-lsp", path: "/oceanix/crates/oceanix-lsp", type: "directory" },
-      { name: "oceanix-pty", path: "/oceanix/crates/oceanix-pty", type: "directory" },
-      { name: "oceanix-git", path: "/oceanix/crates/oceanix-git", type: "directory" },
-      { name: "oceanix-search", path: "/oceanix/crates/oceanix-search", type: "directory" },
-      { name: "oceanix-ai", path: "/oceanix/crates/oceanix-ai", type: "directory" },
-    ]},
-    { name: "packages", path: "/oceanix/packages", type: "directory" },
-    { name: "ai-server", path: "/oceanix/ai-server", type: "directory" },
-    { name: "Cargo.toml", path: "/oceanix/Cargo.toml", type: "file" },
-    { name: "README.md", path: "/oceanix/README.md", type: "file", gitStatus: "untracked" },
-    { name: "REQUIREMENTS.md", path: "/oceanix/REQUIREMENTS.md", type: "file" },
-  ],
-};
+// Files/dirs to skip when building the tree
+const SKIP = new Set([
+  ".git", "node_modules", "target", "dist", ".next",
+  "__pycache__", ".venv", "venv", ".idea", ".vscode",
+  ".DS_Store", "Thumbs.db",
+]);
 
-// Demo git status
-const DEMO_GIT_FILES: GitFileStatus[] = [
-  { path: "app/src/App.tsx", status: "modified" },
-  { path: "app/src/components/EditorTabs.tsx", status: "added" },
-  { path: "app/src/components/Terminal.tsx", status: "added" },
-  { path: "app/src/components/GitPanel.tsx", status: "added" },
-  { path: "src-tauri/src/lib.rs", status: "modified" },
-  { path: "src-tauri/src/commands.rs", status: "modified" },
-  { path: "src-tauri/Cargo.toml", status: "modified" },
-  { path: "crates/oceanix-pty/src/lib.rs", status: "untracked" },
-  { path: "crates/oceanix-git/src/lib.rs", status: "untracked" },
-  { path: "crates/oceanix-search/src/lib.rs", status: "untracked" },
-];
+async function buildFileTree(dirPath: string, dirName: string, depth: number): Promise<FileNode> {
+  const node: FileNode = {
+    name: dirName,
+    path: dirPath,
+    type: "directory",
+    children: [],
+  };
 
-export default function Sidebar({ view, onOpenFile }: SidebarProps) {
+  if (depth <= 0) return node;
+
+  try {
+    const entries = await readDir(dirPath);
+    const children: FileNode[] = [];
+
+    for (const entry of entries) {
+      if (SKIP.has(entry.name)) continue;
+      if (entry.isDir) {
+        children.push(await buildFileTree(entry.path, entry.name, depth - 1));
+      } else {
+        children.push({ name: entry.name, path: entry.path, type: "file" });
+      }
+    }
+
+    // Sort: directories first, then alphabetically
+    children.sort((a, b) => {
+      if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    node.children = children;
+  } catch {
+    // Permission denied, empty dir, etc. — return node without children
+    node.children = [];
+  }
+
+  return node;
+}
+
+export default function Sidebar({ view, onOpenFile, projectRoot }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Array<{ file: string; line: number; text: string }>>([]);
+  const [fileTree, setFileTree] = useState<FileNode | null>(null);
+  const [treeLoading, setTreeLoading] = useState(false);
+  const [treeError, setTreeError] = useState<string | null>(null);
+
+  // Git state
+  const [gitFiles, setGitFiles] = useState<GitFileStatus[]>([]);
+  const [gitBranch, setGitBranch] = useState("main");
+  const [gitLoading, setGitLoading] = useState(false);
+
+  // Load file tree when explorer view becomes active
+  useEffect(() => {
+    if (view !== "explorer") return;
+    if (fileTree) return; // already loaded
+
+    let cancelled = false;
+    setTreeLoading(true);
+    setTreeError(null);
+
+    const rootName = projectRoot.split(/[/\\]/).pop() || projectRoot;
+    buildFileTree(projectRoot, rootName, 4)
+      .then((tree) => {
+        if (!cancelled) {
+          setFileTree(tree);
+          setTreeLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setTreeError(String(err));
+          setTreeLoading(false);
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, [view, projectRoot]);
+
+  // Reload file tree
+  const refreshTree = useCallback(() => {
+    setFileTree(null);
+  }, []);
+
+  // Load git data when git view becomes active
+  useEffect(() => {
+    if (view !== "git") return;
+
+    let cancelled = false;
+    setGitLoading(true);
+
+    Promise.all([
+      gitStatus().catch(() => [] as GitFileStatus[]),
+      gitBranchName().catch(() => "main"),
+    ]).then(([files, branch]) => {
+      if (!cancelled) {
+        setGitFiles(files.map((f: { path: string; status: string }) => ({
+          path: f.path,
+          status: f.status as GitFileStatus["status"],
+        })));
+        setGitBranch(branch);
+        setGitLoading(false);
+      }
+    });
+
+    return () => { cancelled = true; };
+  }, [view]);
+
+  const handleGitCommit = useCallback(async (message: string) => {
+    try {
+      await gitCommit(message);
+      const [files, branch] = await Promise.all([
+        gitStatus().catch(() => [] as GitFileStatus[]),
+        gitBranchName().catch(() => "main"),
+      ]);
+      setGitFiles(files.map((f: { path: string; status: string }) => ({
+        path: f.path,
+        status: f.status as GitFileStatus["status"],
+      })));
+      setGitBranch(branch);
+    } catch (err) {
+      console.error("Commit failed:", err);
+    }
+  }, []);
+
+  const handleGitRefresh = useCallback(async () => {
+    try {
+      setGitLoading(true);
+      const [files, branch] = await Promise.all([
+        gitStatus().catch(() => [] as GitFileStatus[]),
+        gitBranchName().catch(() => "main"),
+      ]);
+      setGitFiles(files.map((f: { path: string; status: string }) => ({
+        path: f.path,
+        status: f.status as GitFileStatus["status"],
+      })));
+      setGitBranch(branch);
+    } finally {
+      setGitLoading(false);
+    }
+  }, []);
 
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) { setSearchResults([]); return; }
@@ -104,7 +193,53 @@ export default function Sidebar({ view, onOpenFile }: SidebarProps) {
   return (
     <div className="sidebar">
       {view === "explorer" && (
-        <FileTree root={DEMO_FILES} onOpenFile={handleOpenFile} />
+        <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+          {/* Toolbar */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "4px 8px", fontSize: 11, fontWeight: 600,
+            color: "var(--text-secondary)", textTransform: "uppercase",
+            letterSpacing: "0.5px", borderBottom: "1px solid var(--border-color)",
+          }}>
+            <span>Explorer</span>
+            <button
+              onClick={refreshTree}
+              title="Refresh"
+              style={{
+                background: "none", border: "none", color: "var(--text-secondary)",
+                cursor: "pointer", fontSize: 14, padding: "0 4px", lineHeight: 1,
+              }}
+            >
+              ↻
+            </button>
+          </div>
+
+          {/* Tree content */}
+          <div style={{ flex: 1, overflow: "auto" }}>
+            {treeLoading && (
+              <div style={{ padding: 12, color: "var(--text-secondary)", fontSize: 13 }}>
+                Loading...
+              </div>
+            )}
+            {treeError && (
+              <div style={{ padding: 12, color: "var(--text-error)", fontSize: 13 }}>
+                Failed to load: {treeError}
+                <br />
+                <button onClick={refreshTree} style={{ marginTop: 4, cursor: "pointer" }}>
+                  Retry
+                </button>
+              </div>
+            )}
+            {!treeLoading && !treeError && fileTree && (
+              <FileTree root={fileTree} onOpenFile={handleOpenFile} />
+            )}
+            {!treeLoading && !treeError && !fileTree && (
+              <div style={{ padding: 12, color: "var(--text-secondary)", fontSize: 13 }}>
+                Open a folder to see files
+              </div>
+            )}
+          </div>
+        </div>
       )}
       {view === "search" && (
         <div style={{ padding: 8 }}>
@@ -139,7 +274,16 @@ export default function Sidebar({ view, onOpenFile }: SidebarProps) {
         </div>
       )}
       {view === "git" && (
-        <GitPanel files={DEMO_GIT_FILES} branch="main" />
+        gitLoading ? (
+          <div style={{ padding: 12, color: "var(--text-secondary)", fontSize: 13 }}>Loading git status...</div>
+        ) : (
+          <GitPanel
+            files={gitFiles}
+            branch={gitBranch}
+            onCommit={handleGitCommit}
+            onRefresh={handleGitRefresh}
+          />
+        )
       )}
       {view === "ai" && (
         <div style={{ padding: 12, color: "var(--text-secondary)" }}>

@@ -2,9 +2,16 @@ mod commands;
 
 use commands::AiState;
 use std::sync::Mutex;
+use oceanix_git::GitRepo;
 
 /// Oceanix: Next-generation code editor.
 /// Thin shell — delegates all logic to workspace crates.
+
+// ─── Managed State ─────────────────────────────────
+
+pub struct GitState {
+    pub repo: Mutex<Option<GitRepo>>,
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -20,9 +27,19 @@ pub fn run() {
         bridge: Mutex::new(oceanix_ai::AiBridge::new()),
     };
 
+    // Attempt to open git repo at current directory
+    let git_state = GitState {
+        repo: Mutex::new(
+            std::env::current_dir()
+                .ok()
+                .and_then(|cwd| GitRepo::open(&cwd).ok())
+        ),
+    };
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .manage(ai_state)
+        .manage(git_state)
         .invoke_handler(tauri::generate_handler![
             commands::greet,
             commands::file_read,
@@ -46,6 +63,12 @@ pub fn run() {
             commands::terminal_resize,
             commands::terminal_kill,
             commands::recent_projects,
+            commands::git_status,
+            commands::git_diff,
+            commands::git_commit,
+            commands::git_branch_name,
+            commands::git_branches,
+            commands::get_cwd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Oceanix");

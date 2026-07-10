@@ -111,6 +111,7 @@ export default function EditorTabs({
             fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
             automaticLayout: true,
             minimap: { enabled: true },
+            folding: true,
             lineNumbers: "on",
             renderWhitespace: "selection",
             tabSize: 2,

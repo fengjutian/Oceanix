@@ -249,6 +249,85 @@ pub fn recent_projects() -> Result<Vec<serde_json::Value>, String> {
     Ok(vec![])
 }
 
+// ─── Git ────────────────────────────────────────────
+
+use oceanix_git::GitRepo;
+
+#[derive(serde::Serialize)]
+pub struct GitStatusEntry {
+    path: String,
+    status: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct GitBranchEntry {
+    name: String,
+    #[serde(rename = "isHead")]
+    is_head: bool,
+}
+
+fn repo_from_state(state: &tauri::State<'_, crate::GitState>) -> Result<GitRepo, String> {
+    let guard = state.repo.lock().map_err(|e| format!("lock: {e}"))?;
+    guard.clone().ok_or_else(|| "No git repo opened".into())
+}
+
+#[tauri::command]
+pub fn git_status(state: tauri::State<'_, crate::GitState>) -> Result<Vec<GitStatusEntry>, String> {
+    let repo = repo_from_state(&state)?;
+    let files = repo.status()?;
+    Ok(files
+        .into_iter()
+        .map(|f| GitStatusEntry {
+            path: f.path,
+            status: match f.status {
+                oceanix_git::StatusKind::Modified => "modified".into(),
+                oceanix_git::StatusKind::Added => "added".into(),
+                oceanix_git::StatusKind::Deleted => "deleted".into(),
+                oceanix_git::StatusKind::Untracked => "untracked".into(),
+            },
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub fn git_diff(path: Option<String>, staged: Option<bool>, state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
+    let repo = repo_from_state(&state)?;
+    if staged.unwrap_or(false) {
+        repo.diff_staged()
+    } else {
+        repo.diff(path.as_deref())
+    }
+}
+
+#[tauri::command]
+pub fn git_commit(message: String, state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
+    let repo = repo_from_state(&state)?;
+    repo.commit(&message)
+}
+
+#[tauri::command]
+pub fn git_branch_name(state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
+    let repo = repo_from_state(&state)?;
+    repo.branch_name()
+}
+
+#[tauri::command]
+pub fn git_branches(state: tauri::State<'_, crate::GitState>) -> Result<Vec<GitBranchEntry>, String> {
+    let repo = repo_from_state(&state)?;
+    Ok(repo
+        .branches()?
+        .into_iter()
+        .map(|b| GitBranchEntry { name: b.name, is_head: b.is_head })
+        .collect())
+}
+
+#[tauri::command]
+pub fn get_cwd() -> Result<String, String> {
+    std::env::current_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| format!("Failed to get current dir: {e}"))
+}
+
 // ─── Types ───────────────────────────────────────────
 
 #[derive(serde::Serialize, Clone)]

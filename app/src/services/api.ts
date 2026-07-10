@@ -87,6 +87,32 @@ export async function getRecentProjects(): Promise<Array<{ path: string; name: s
   return invoke("recent_projects");
 }
 
+export async function getProjectRoot(): Promise<string> {
+  return invoke("get_cwd");
+}
+
+// ─── Git ─────────────────────────────────────────────
+
+export async function gitStatus(): Promise<Array<{ path: string; status: string }>> {
+  return invoke("git_status");
+}
+
+export async function gitDiff(path?: string, staged?: boolean): Promise<string> {
+  return invoke("git_diff", { path, staged });
+}
+
+export async function gitCommit(message: string): Promise<string> {
+  return invoke("git_commit", { message });
+}
+
+export async function gitBranchName(): Promise<string> {
+  return invoke("git_branch_name");
+}
+
+export async function gitBranches(): Promise<Array<{ name: string; isHead: boolean }>> {
+  return invoke("git_branches");
+}
+
 // ─── AI ──────────────────────────────────────────────
 
 export async function aiComplete(params: {

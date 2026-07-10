@@ -113,6 +113,47 @@ export async function gitBranches(): Promise<Array<{ name: string; isHead: boole
   return invoke("git_branches");
 }
 
+// ─── LSP ─────────────────────────────────────────────
+
+export async function lspStart(languageId: string, rootPath: string): Promise<string> {
+  return invoke("lsp_start", { languageId, rootPath });
+}
+
+export async function lspDidOpen(languageId: string, path: string, text: string): Promise<void> {
+  return invoke("lsp_did_open", { languageId, path, text });
+}
+
+export async function lspDidChange(languageId: string, path: string, version: number, text: string): Promise<void> {
+  return invoke("lsp_did_change", { languageId, path, version, text });
+}
+
+export async function lspHover(languageId: string, path: string, line: number, character: number): Promise<{ contents: string } | null> {
+  return invoke("lsp_hover", { languageId, path, line, character });
+}
+
+export async function lspDefinition(languageId: string, path: string, line: number, character: number): Promise<Array<{
+  uri: string;
+  rangeStartLine: number;
+  rangeStartChar: number;
+  rangeEndLine: number;
+  rangeEndChar: number;
+}>> {
+  return invoke("lsp_definition", { languageId, path, line, character });
+}
+
+export async function lspDiagnostics(languageId: string): Promise<Array<{
+  file: string;
+  line: number;
+  column: number;
+  endLine: number;
+  endColumn: number;
+  severity: number;
+  message: string;
+  source: string;
+}>> {
+  return invoke("lsp_diagnostics", { languageId });
+}
+
 // ─── AI ──────────────────────────────────────────────
 
 export async function aiComplete(params: {

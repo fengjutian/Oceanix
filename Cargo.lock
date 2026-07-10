@@ -2310,6 +2310,8 @@ dependencies = [
 name = "oceanix-lsp"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "tracing",
 ]
 

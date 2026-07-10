@@ -2,7 +2,7 @@ mod commands;
 
 use commands::AiState;
 use std::sync::Mutex;
-use oceanix_git::GitRepo;
+use std::collections::HashMap;
 use oceanix_pty::PtySession;
 
 /// Oceanix: Next-generation code editor.
@@ -11,11 +11,15 @@ use oceanix_pty::PtySession;
 // ─── Managed State ─────────────────────────────────
 
 pub struct GitState {
-    pub repo: Mutex<Option<GitRepo>>,
+    pub project_root: Mutex<Option<String>>,
 }
 
 pub struct PtyState {
     pub pty: Mutex<PtySession>,
+}
+
+pub struct LspState {
+    pub clients: Mutex<HashMap<String, oceanix_lsp::LspClient>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -34,10 +38,10 @@ pub fn run() {
 
     // Attempt to open git repo at current directory
     let git_state = GitState {
-        repo: Mutex::new(
+        project_root: Mutex::new(
             std::env::current_dir()
                 .ok()
-                .and_then(|cwd| GitRepo::open(&cwd).ok())
+                .map(|p| p.to_string_lossy().to_string())
         ),
     };
 
@@ -46,11 +50,17 @@ pub fn run() {
         pty: Mutex::new(PtySession::new()),
     };
 
+    // LSP client registry (lazy — spawned per language on demand)
+    let lsp_state = LspState {
+        clients: Mutex::new(HashMap::new()),
+    };
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .manage(ai_state)
         .manage(git_state)
         .manage(pty_state)
+        .manage(lsp_state)
         .invoke_handler(tauri::generate_handler![
             commands::greet,
             commands::file_read,
@@ -80,6 +90,12 @@ pub fn run() {
             commands::git_commit,
             commands::git_branch_name,
             commands::git_branches,
+            commands::lsp_start,
+            commands::lsp_hover,
+            commands::lsp_definition,
+            commands::lsp_did_open,
+            commands::lsp_did_change,
+            commands::lsp_diagnostics,
             commands::get_cwd,
         ])
         .run(tauri::generate_context!())

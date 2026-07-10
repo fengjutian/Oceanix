@@ -148,7 +148,7 @@ pub fn session_load() -> Result<Option<serde_json::Value>, String> {
 
 #[tauri::command]
 pub fn ai_complete(params: serde_json::Value, ai_state: State<AiState>) -> Result<Option<serde_json::Value>, String> {
-    let mut bridge = ai_state.bridge.lock().unwrap();
+    let mut bridge = ai_state.bridge.lock().map_err(|e| format!("Lock poisoned: {e}"))?;
     if !bridge.is_ready() {
         // Try to start the sidecar
         bridge.start().ok();
@@ -167,7 +167,7 @@ pub fn ai_complete(params: serde_json::Value, ai_state: State<AiState>) -> Resul
 
 #[tauri::command]
 pub fn ai_chat(params: serde_json::Value, ai_state: State<AiState>) -> Result<String, String> {
-    let mut bridge = ai_state.bridge.lock().unwrap();
+    let mut bridge = ai_state.bridge.lock().map_err(|e| format!("Lock poisoned: {e}"))?;
     if !bridge.is_ready() {
         bridge.start().ok();
     }
@@ -177,8 +177,8 @@ pub fn ai_chat(params: serde_json::Value, ai_state: State<AiState>) -> Result<St
 }
 
 #[tauri::command]
-pub fn ai_status(ai_state: State<AiState>) -> bool {
-    ai_state.bridge.lock().unwrap().is_ready()
+pub fn ai_status(ai_state: State<AiState>) -> Result<bool, String> {
+    ai_state.bridge.lock().map_err(|e| format!("Lock poisoned: {e}"))?.is_ready()
 }
 
 // ─── Types ───────────────────────────────────────────

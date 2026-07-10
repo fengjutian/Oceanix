@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from "react";
 import Editor, { OnMount } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
-import { aiComplete } from "../../services/api";
+import { aiComplete } from "../services/api";
 
 export interface EditorTab {
   id: string;
@@ -32,10 +32,10 @@ export default function EditorTabs({
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
   const handleEditorMount: OnMount = useCallback(
-    (_editor: editor.IStandaloneCodeEditor) => {
+    (_editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
       // Register inline completion provider for AI completions
-      if (activeTab) {
-        const { languages } = window.monaco;
+      if (activeTab && monaco) {
+        const { languages } = monaco;
         languages.registerInlineCompletionsProvider?.(
           { language: activeTab.language },
           {

@@ -81,7 +81,7 @@ export class KeybindingRegistry {
         if (chordKeys.length !== this.pendingKeys.length + 1) continue;
 
         // Verify all previous chord keys still match
-        const allMatch = this.pendingKeys.every((pk, i) => pk);
+        const allMatch = true; // pendingKeys already validated during recording
         if (!allMatch) continue;
 
         // Check if current event completes the chord
@@ -91,9 +91,8 @@ export class KeybindingRegistry {
           return binding;
         }
       }
-      // Chord timeout — reset
+      // No chord match — reset and fall through to single-key check
       this.resetChord();
-      return null;
     }
 
     // Check chord bindings: first key in a multi-key binding

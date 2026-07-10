@@ -8,4 +8,5 @@ license.workspace = true
 [dependencies]
 tokio.workspace = true
 tracing.workspace = true
-keyring-rs = "3"
+serde.workspace = true
+serde_json.workspace = true

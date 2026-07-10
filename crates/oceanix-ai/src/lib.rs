@@ -76,7 +76,7 @@ impl AiBridge {
         let process = self.process.as_mut().ok_or("No process")?;
         let stdin = process.stdin.as_mut().ok_or("No stdin")?;
 
-        let request_str = serde_json::to_string(&request).unwrap();
+        let request_str = serde_json::to_string(&request).map_err(|e| format!("Serialize: {e}"))?;
         writeln!(stdin, "{request_str}").map_err(|e| format!("Write error: {e}"))?;
         stdin.flush().map_err(|e| format!("Flush error: {e}"))?;
 
@@ -132,11 +132,11 @@ impl SharedAiBridge {
     }
 
     pub fn start(&self) -> Result<(), String> {
-        self.inner.lock().unwrap().start()
+        self.inner.lock().map_err(|e| format!("Lock: {e}"))?.start()
     }
 
     pub fn send(&self, method: &str, params: serde_json::Value) -> Result<AiResponse, String> {
-        self.inner.lock().unwrap().send_request(method, params)
+        self.inner.lock().map_err(|e| format!("Lock: {e}"))?.send_request(method, params)
     }
 }
 
@@ -145,7 +145,7 @@ fn uuid_v4() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_nanos();
     format!("req-{ts:x}")
 }

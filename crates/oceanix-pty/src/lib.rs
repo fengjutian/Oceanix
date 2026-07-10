@@ -2,7 +2,7 @@
 //! Manages multiple terminal sessions via `portable-pty`.
 //! Zero Tauri dependency.
 
-use portable_pty::{native_pty_system, CommandBuilder, PtySize, PtySystem, ChildKiller};
+use portable_pty::{native_pty_system, CommandBuilder, PtySize, ChildKiller};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicU64, Ordering};

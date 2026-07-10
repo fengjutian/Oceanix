@@ -157,7 +157,7 @@ pub fn ai_complete(params: serde_json::Value, ai_state: State<AiState>) -> Resul
         return Ok(None); // Sidecar not available — silently return
     }
     match bridge.send_request("completion", params) {
-        Ok(response) => Ok(response.result),
+        Ok(response) => Ok(oceanix_ai::flatten_mcp_result(&response.result)),
         Err(e) => {
             tracing::warn!("AI completion failed: {e}");
             Ok(None)
@@ -174,7 +174,7 @@ pub fn ai_chat(params: serde_json::Value, ai_state: State<AiState>) -> Result<St
     bridge
         .send_request("chat", params)
         .map(|r| {
-            match r.result {
+            match oceanix_ai::flatten_mcp_result(&r.result) {
                 Some(serde_json::Value::String(s)) => s,
                 Some(v) => v.to_string(),
                 None => String::new(),

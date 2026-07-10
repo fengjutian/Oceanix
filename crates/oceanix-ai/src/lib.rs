@@ -17,12 +17,32 @@ pub struct AiBridge {
     response_rx: Option<mpsc::Receiver<Result<String, String>>>,
 }
 
-/// Response from the AI sidecar
+/// Response from the AI sidecar (MCP protocol)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AiResponse {
     pub id: String,
+    /// MCP returns result.content[0].text; we flatten it here
+    #[serde(default)]
     pub result: Option<serde_json::Value>,
+    #[serde(default)]
     pub error: Option<String>,
+}
+
+/// Parse MCP tool result into a flat JSON value.
+/// MCP returns: {"content": [{"type": "text", "text": "..."}]}
+/// We extract the text or return the raw result.
+pub fn flatten_mcp_result(result: &Option<serde_json::Value>) -> Option<serde_json::Value> {
+    let result = result.as_ref()?;
+    // Try MCP content format
+    if let Some(content) = result.get("content").and_then(|c| c.as_array()) {
+        if let Some(first) = content.first() {
+            if let Some(text) = first.get("text").and_then(|t| t.as_str()) {
+                return Some(serde_json::Value::String(text.to_string()));
+            }
+        }
+    }
+    // Fallback: return the raw result
+    Some(result.clone())
 }
 
 impl AiBridge {
@@ -37,16 +57,19 @@ impl AiBridge {
 
     /// Start the Python sidecar process
     pub fn start(&mut self) -> Result<(), String> {
-        let child = Command::new("oceanix-ai")
-            .or_else(|_| Command::new("python"))
-            .or_else(|_| Command::new("python3"))
-            .arg("-m")
-            .arg("oceanix_ai_server.server")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .map_err(|e| format!("Failed to start AI sidecar: {e}"))?;
+        let child = ["oceanix-ai", "python", "python3"]
+            .iter()
+            .find_map(|bin| {
+                Command::new(bin)
+                    .arg("-m")
+                    .arg("oceanix_ai_server.server")
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::inherit())
+                    .spawn()
+                    .ok()
+            })
+            .ok_or_else(|| "Failed to start AI sidecar: no suitable binary found (tried oceanix-ai, python, python3)".to_string())?;
 
         // Take stdout from the child and spawn a persistent reader thread.
         // This decouples reading from request timing so we can use recv_timeout.
@@ -80,7 +103,7 @@ impl AiBridge {
         self.ready
     }
 
-    /// Send a JSON-RPC request to the sidecar and get the response
+    /// Send a tool call request to the MCP sidecar
     pub fn send_request(
         &mut self,
         method: &str,
@@ -91,11 +114,15 @@ impl AiBridge {
         }
 
         let id = req_id();
+        // MCP protocol: tools/call with {name, arguments}
         let request = serde_json::json!({
             "jsonrpc": "2.0",
             "id": id,
-            "method": method,
-            "params": params,
+            "method": "tools/call",
+            "params": {
+                "name": method,
+                "arguments": params,
+            },
         });
 
         let process = self.process.as_mut().ok_or("No process")?;

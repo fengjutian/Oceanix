@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react";
+import { ChevronDown, ChevronRight, File, Folder, FolderOpen } from "lucide-react";
 import type { FileNode, FileTreeProps } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -82,10 +83,9 @@ const styles = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    width: 20,
+    width: 18,
     height: TREE.rowHeight,
     flexShrink: 0,
-    fontSize: 14,
   } satisfies React.CSSProperties,
 
   label: {
@@ -178,8 +178,8 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(
       color: gitColor(node.gitStatus),
     };
 
-    // File icon: 📄 ; directory: 📁 (expanded) / 📂 (collapsed)
-    const icon = isDir ? (expanded ? "📁" : "📂") : "📄";
+    // File icon: File ; directory: FolderOpen (expanded) / Folder (collapsed)
+    const icon = isDir ? (expanded ? <FolderOpen size={16} /> : <Folder size={16} />) : <File size={16} />;
 
     return (
       <>
@@ -194,7 +194,7 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(
 
           {/* Twistie column (or empty spacer for files) */}
           <span style={styles.twistie}>
-            {isDir ? (expanded ? "▾" : "▸") : null}
+            {isDir ? (expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />) : null}
           </span>
 
           {/* Icon */}

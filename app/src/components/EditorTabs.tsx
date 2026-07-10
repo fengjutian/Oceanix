@@ -105,9 +105,11 @@ export default function EditorTabs({
           theme="vs-dark"
           onChange={(value) => onContentChange(activeTab.id, value || "")}
           onMount={handleEditorMount}
+          loading={<div className="editor-loading">Loading editor...</div>}
           options={{
             fontSize: 14,
             fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
+            automaticLayout: true,
             minimap: { enabled: true },
             lineNumbers: "on",
             renderWhitespace: "selection",

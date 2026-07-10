@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "identifier": "com.oceanix.app",
   "build": {
-    "frontendDist": "../app/dist",
+    "frontendDist": "app/dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "npm run dev --prefix ../app",
-    "beforeBuildCommand": "npm run build --prefix ../app"
+    "beforeDevCommand": "npm run dev --prefix app",
+    "beforeBuildCommand": "npm run build --prefix app"
   },
   "app": {
     "windows": [

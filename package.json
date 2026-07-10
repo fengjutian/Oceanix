@@ -3,7 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "dev": "npm run dev --prefix app",
+    "build": "npm run build --prefix app",
+    "typecheck": "tsc --noEmit",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
   },
   "workspaces": [
     "app",

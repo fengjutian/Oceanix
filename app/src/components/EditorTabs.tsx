@@ -1,7 +1,13 @@
 import React, { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from "react";
 import Editor, { OnMount, DiffEditor } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
-import { aiComplete } from "../services/api";
+import { aiComplete, lspHover, lspDefinition, lspStart, lspDidOpen, lspDidChange } from "../services/api";
+
+const LSP_LANGUAGES = new Set(["rust", "python", "typescript", "typescriptreact", "javascript"]);
+
+function isLspLanguage(lang: string): boolean {
+  return LSP_LANGUAGES.has(lang);
+}
 
 export interface EditorTab {
   id: string;
@@ -25,6 +31,7 @@ interface EditorTabsProps {
   onContentChange: (id: string, content: string) => void;
   onSave: (id: string) => void;
   editorRef?: React.MutableRefObject<editor.IStandaloneCodeEditor | null>;
+  projectRoot?: string;
 }
 
 const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function EditorTabs({
@@ -35,6 +42,7 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
   onContentChange,
   onSave,
   editorRef,
+  projectRoot,
 }, ref) {
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
@@ -43,13 +51,53 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
   const [diffModified, setDiffModified] = useState("");
   const [showDiff, setShowDiff] = useState(false);
 
-  // Store the monaco instance so we can register providers later (e.g. on tab switch)
+  const lspDisposablesRef = useRef<Array<{ dispose: () => void }>>([]);
   const handleEditorMount: OnMount = useCallback(
-    (editor: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
+    (editorInstance: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
       monacoRef.current = monaco;
-      if (editorRef) editorRef.current = editor;
+      if (editorRef) editorRef.current = editorInstance;
+
+      // Register LSP hover provider (only for languages with LSP support)
+      const hoverDisposable = monaco.languages.registerHoverProvider("*", {
+        provideHover: async (model, position) => {
+          const tab = tabs.find((t) => t.id === activeTabId);
+          if (!tab || !isLspLanguage(tab.language)) return null;
+          try {
+            const result = await lspHover(tab.language, tab.path, position.lineNumber - 1, position.column - 1);
+            if (result) {
+              return { contents: [{ value: result.contents }], range: undefined as unknown as editor.IRange };
+            }
+          } catch { /* LSP not available */ }
+          return null;
+        },
+      });
+
+      // Register LSP definition provider
+      const defDisposable = monaco.languages.registerDefinitionProvider("*", {
+        provideDefinition: async (model, position) => {
+          const tab = tabs.find((t) => t.id === activeTabId);
+          if (!tab || !isLspLanguage(tab.language)) return null;
+          try {
+            const locs = await lspDefinition(tab.language, tab.path, position.lineNumber - 1, position.column - 1);
+            if (locs.length > 0) {
+              return locs.map((l) => ({
+                uri: monaco.Uri.parse(l.uri),
+                range: new monaco.Range(
+                  l.rangeStartLine + 1, l.rangeStartChar + 1,
+                  l.rangeEndLine + 1, l.rangeEndChar + 1,
+                ),
+              }));
+            }
+          } catch { /* LSP not available */ }
+          return null;
+        },
+      });
+
+      // Store disposables for cleanup and re-registration
+      lspDisposablesRef.current.forEach((d) => d.dispose());
+      lspDisposablesRef.current = [hoverDisposable, defDisposable];
     },
-    [editorRef]
+    [editorRef, tabs, activeTabId]
   );
 
   const toggleMarkdownPreview = useCallback(() => {
@@ -71,7 +119,34 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
     openGitDiff,
   }), [toggleMarkdownPreview, openGitDiff]);
 
-  // Re-register inline completions whenever the active tab's language changes
+  // ─── LSP lifecycle ──────────────────────────────────
+  const lspVersionRef = useRef(1);
+
+  useEffect(() => {
+    if (!activeTab || !projectRoot) return;
+    if (!isLspLanguage(activeTab.language)) return;
+
+    const lang = activeTab.language;
+    lspVersionRef.current = 1;
+
+    // Start LSP server for this language (idempotent)
+    lspStart(lang, projectRoot).catch(() => {});
+    // Notify server about open document
+    lspDidOpen(lang, activeTab.path, activeTab.content).catch(() => {});
+
+    return () => {
+      // LSP servers stay alive; no explicit close needed
+    };
+  }, [activeTab?.language, activeTab?.path, projectRoot]);
+
+  // Send didChange when content changes (debounced)
+  useEffect(() => {
+    if (!activeTab || !isLspLanguage(activeTab.language)) return;
+    const timer = setTimeout(() => {
+      lspDidChange(activeTab.language, activeTab.path, lspVersionRef.current++, activeTab.content).catch(() => {});
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [activeTab?.content]);
   useEffect(() => {
     if (!activeTab || !monacoRef.current) return;
     const monaco = monacoRef.current;

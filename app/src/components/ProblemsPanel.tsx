@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { lspDiagnostics } from "../services/api";
 
 interface Problem {
   severity: "error" | "warning" | "info";
@@ -20,11 +21,38 @@ const SEVERITY_COLORS: Record<string, string> = {
   info: "#75beff",
 };
 
-// Initial placeholder — will be populated by LSP once implemented
-const DEMO_PROBLEMS: Problem[] = [];
+const SEVERITY_MAP: Record<number, Problem["severity"]> = {
+  1: "error",
+  2: "warning",
+  3: "info",
+};
 
 export default function ProblemsPanel() {
-  const [problems] = useState<Problem[]>(DEMO_PROBLEMS);
+  const [problems, setProblems] = useState<Problem[]>([]);
+
+  // Poll for LSP diagnostics every 2s
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const all: Problem[] = [];
+      for (const lang of ["rust", "python", "typescript", "typescriptreact", "javascript"]) {
+        try {
+          const diags = await lspDiagnostics(lang);
+          for (const d of diags) {
+            all.push({
+              severity: SEVERITY_MAP[d.severity] || "info",
+              message: d.message,
+              file: d.file,
+              line: d.line,
+              column: d.column,
+            });
+          }
+        } catch { /* LSP not started yet */ }
+      }
+      setProblems(all);
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   if (problems.length === 0) {
     return (

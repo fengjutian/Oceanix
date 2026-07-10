@@ -333,6 +333,7 @@ function App() {
                   onContentChange={updateContent}
                   onSave={saveTab}
                   editorRef={editorRef}
+                  projectRoot={projectRoot}
                 />
               </Panel>
               {splitVisible && (
@@ -358,6 +359,7 @@ function App() {
                         );
                       }}
                       editorRef={splitEditorRef}
+                      projectRoot={projectRoot}
                     />
                   </Panel>
                 </>

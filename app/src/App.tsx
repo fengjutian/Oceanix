@@ -42,10 +42,15 @@ function App() {
   const [projectRoot, setProjectRoot] = useState(".");
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const editorHandleRef = useRef<EditorTabsHandle | null>(null);
+  const splitEditorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const splitHandleRef = useRef<EditorTabsHandle | null>(null);
 
   // ─── Tab management ─────────────────────────────────
   const [tabs, setTabs] = useState<EditorTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [splitTabs, setSplitTabs] = useState<EditorTab[]>([]);
+  const [splitActiveTabId, setSplitActiveTabId] = useState<string | null>(null);
+  const [splitVisible, setSplitVisible] = useState(false);
 
   const openTab = useCallback((tab: EditorTab) => {
     setTabs((prev) => {
@@ -210,6 +215,13 @@ function App() {
       action: () => editorHandleRef.current?.openGitDiff(),
     },
     {
+      id: "editor.split",
+      label: "Split Editor Right",
+      category: "View",
+      keybinding: "Ctrl+\\",
+      action: () => setSplitVisible((v) => !v),
+    },
+    {
       id: "search.global",
       label: "Global Search",
       category: "Search",
@@ -323,6 +335,33 @@ function App() {
                   editorRef={editorRef}
                 />
               </Panel>
+              {splitVisible && (
+                <>
+                  <PanelResizeHandle className="resize-handle" />
+                  <Panel minSize={20}>
+                    <EditorTabs
+                      ref={splitHandleRef}
+                      tabs={splitTabs}
+                      activeTabId={splitActiveTabId}
+                      onSelectTab={setSplitActiveTabId}
+                      onCloseTab={(id) => {
+                        setSplitTabs((prev) => prev.filter((t) => t.id !== id));
+                      }}
+                      onContentChange={(id, content) => {
+                        setSplitTabs((prev) =>
+                          prev.map((t) => (t.id === id ? { ...t, content, dirty: true } : t))
+                        );
+                      }}
+                      onSave={(id) => {
+                        setSplitTabs((prev) =>
+                          prev.map((t) => (t.id === id ? { ...t, dirty: false } : t))
+                        );
+                      }}
+                      editorRef={splitEditorRef}
+                    />
+                  </Panel>
+                </>
+              )}
               {panelVisible && (
                 <>
                   <PanelResizeHandle className="resize-handle" />

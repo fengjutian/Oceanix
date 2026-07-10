@@ -6,6 +6,7 @@ members = [
     "crates/oceanix-git",
     "crates/oceanix-search",
     "crates/oceanix-ai",
+    "crates/oceanix-plugin",
 ]
 resolver = "2"
 

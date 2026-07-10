@@ -2316,6 +2316,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "oceanix-plugin"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
 name = "oceanix-pty"
 version = "0.1.0"
 dependencies = [

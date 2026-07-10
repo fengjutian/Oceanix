@@ -136,17 +136,32 @@ function App() {
     },
   ], [activeTabId, saveTab, closeTab, openTab]);
 
+  // Always holds the latest commands so the keybinding registry
+  // never needs to be rebuilt when command actions change.
+  const commandsRef = useRef(quickOpenCommands);
+  commandsRef.current = quickOpenCommands;
+
   // ─── Keyboard shortcuts ─────────────────────────────
   useEffect(() => {
     const registry = new KeybindingRegistry();
     registry.registerMany(DEFAULT_BINDINGS);
-    for (const cmd of quickOpenCommands) {
-      registry.registerCommand(cmd.id, cmd.action);
-    }
     registry.registerCommand("palette.show", () => setShowPalette(true));
+
+    // Route every default binding through a stable handler that
+    // reads the latest commands via ref — never stale.
+    const handler = (cmdId: string) => {
+      const cmd = commandsRef.current.find((c) => c.id === cmdId);
+      cmd?.action();
+    };
+    for (const binding of DEFAULT_BINDINGS) {
+      if (binding.command !== "palette.show") {
+        registry.registerCommand(binding.command, () => handler(binding.command));
+      }
+    }
+
     registry.attach();
     return () => registry.detach();
-  }, [quickOpenCommands]);
+  }, []); // Empty deps — registry created once, never reattached
 
   // ─── Theme ──────────────────────────────────────────
   useEffect(() => {

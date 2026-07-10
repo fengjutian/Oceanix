@@ -5,13 +5,16 @@
 
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
-use tokio::sync::mpsc;
+use std::sync::{mpsc, Mutex};
+use std::time::Duration;
+use tokio::sync::mpsc as tokio_mpsc;
 
 /// AI bridge state — manages the Python sidecar process
 pub struct AiBridge {
     process: Option<Child>,
     ready: bool,
+    /// Receives lines from the persistent stdout reader thread
+    response_rx: Option<mpsc::Receiver<Result<String, String>>>,
 }
 
 /// Response from the AI sidecar
@@ -28,6 +31,7 @@ impl AiBridge {
         Self {
             process: None,
             ready: false,
+            response_rx: None,
         }
     }
 
@@ -44,7 +48,28 @@ impl AiBridge {
             .spawn()
             .map_err(|e| format!("Failed to start AI sidecar: {e}"))?;
 
+        // Take stdout from the child and spawn a persistent reader thread.
+        // This decouples reading from request timing so we can use recv_timeout.
+        let stdout = child.stdout.take().ok_or("No stdout")?;
+        let (tx, rx) = mpsc::channel::<Result<String, String>>();
+        std::thread::Builder::new()
+            .name("ai-sidecar-reader".into())
+            .spawn(move || {
+                let reader = BufReader::new(stdout);
+                for line in reader.lines() {
+                    let msg = match line {
+                        Ok(l) => Ok(l),
+                        Err(e) => Err(format!("Read error: {e}")),
+                    };
+                    if tx.send(msg).is_err() {
+                        break; // receiver dropped — bridge shut down
+                    }
+                }
+            })
+            .map_err(|e| format!("Failed to spawn reader thread: {e}"))?;
+
         self.process = Some(child);
+        self.response_rx = Some(rx);
         self.ready = true;
         tracing::info!("Python AI sidecar started");
         Ok(())
@@ -80,28 +105,48 @@ impl AiBridge {
         writeln!(stdin, "{request_str}").map_err(|e| format!("Write error: {e}"))?;
         stdin.flush().map_err(|e| format!("Flush error: {e}"))?;
 
-        let stdout = process.stdout.as_mut().ok_or("No stdout")?;
-        let reader = BufReader::new(stdout);
-
-        for line in reader.lines() {
-            let line = line.map_err(|e| format!("Read error: {e}"))?;
-            if line.trim().is_empty() {
-                continue;
-            }
-
-            let response: AiResponse = serde_json::from_str(&line)
-                .map_err(|e| format!("Parse error: {e} ({line})"))?;
-
-            if response.id == id {
-                return Ok(response);
-            }
+        // Check if the process crashed before we start waiting for a response
+        match process.try_wait() {
+            Ok(Some(status)) => return Err(format!("Sidecar exited: {status}")),
+            Ok(None) => {}
+            Err(e) => return Err(format!("Process check error: {e}")),
         }
 
-        Err("No response from AI sidecar".into())
+        let rx = self.response_rx.as_ref().ok_or("No response channel")?;
+        let timeout = Duration::from_secs(30);
+
+        loop {
+            match rx.recv_timeout(timeout) {
+                Ok(Ok(line)) => {
+                    if line.trim().is_empty() {
+                        continue;
+                    }
+                    let response: AiResponse = serde_json::from_str(&line)
+                        .map_err(|e| format!("Parse error: {e} ({line})"))?;
+                    if response.id == id {
+                        return Ok(response);
+                    }
+                    // Not our response — keep reading (the sidecar may send
+                    // notifications or responses to other requests)
+                }
+                Ok(Err(e)) => return Err(e),
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    let _ = process.kill();
+                    let _ = process.wait();
+                    self.ready = false;
+                    return Err("AI sidecar timed out after 30s".into());
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err("AI sidecar stdout closed unexpectedly".into());
+                }
+            }
+        }
     }
 
     /// Kill the sidecar process
     pub fn stop(&mut self) {
+        // Drop the receiver first — this unblocks the reader thread
+        self.response_rx = None;
         if let Some(ref mut child) = self.process {
             let _ = child.kill();
             let _ = child.wait();
@@ -120,11 +165,11 @@ impl Drop for AiBridge {
 /// Thread-safe wrapper around AiBridge
 pub struct SharedAiBridge {
     inner: Mutex<AiBridge>,
-    _tx: mpsc::UnboundedSender<()>,
+    _tx: tokio_mpsc::UnboundedSender<()>,
 }
 
 impl SharedAiBridge {
-    pub fn new(_tx: mpsc::UnboundedSender<()>) -> Self {
+    pub fn new(_tx: tokio_mpsc::UnboundedSender<()>) -> Self {
         Self {
             inner: Mutex::new(AiBridge::new()),
             _tx,

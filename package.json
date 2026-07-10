@@ -1,6 +1,10 @@
 {
   "name": "oceanix",
+  "version": "0.1.0",
   "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "workspaces": [
     "app",
     "packages/file-tree",

@@ -1039,3 +1039,94 @@ members = [
 | **远程开发 (SSH/Container)** | VS Code 核心差异化能力，投入产出比低 |
 | **Notebook (Jupyter)** | 独立赛道，暂不涉足 |
 | **Copilot / AI 补全** | 可后期通过扩展集成，非核心路径 |
+
+---
+
+## 7. 实现进度 vs VS Code 差异分析
+
+> 最后更新：2026-07-10
+
+### 7.1 已实现功能清单
+
+| # | 功能 | 状态 | 对应 VS Code | 实现方式 |
+|---|------|------|-------------|----------|
+| 1 | 文本编辑 + 语法高亮 + 多光标 | ✅ | 内置 | Monaco Editor 原生 |
+| 2 | 代码折叠 + 括号配色 + Minimap | ✅ | 内置 | Monaco 配置开启 |
+| 3 | 查找替换 Ctrl+F/H | ✅ | 内置 | Monaco Find Widget |
+| 4 | 自动缩进 + 格式化 | ✅ | 内置 | Monaco + Shift+Alt+F |
+| 5 | 自动保存 | ✅ | `files.autoSave` | 1.5s debounce → `file_write` |
+| 6 | 文件树（真实文件系统） | ✅ | Explorer | `readDir` 递归 4 层，跳过 `.git`/`node_modules` |
+| 7 | 多标签页管理 | ✅ | Tabs | `EditorTabs` 组件，脏状态标记，Ctrl+W 关闭 |
+| 8 | 快捷打开文件 Ctrl+P | ✅ | `workbench.action.quickOpen` | 命令面板合并扁平文件列表 |
+| 9 | 跳转到行 Ctrl+G | ✅ | `workbench.action.gotoLine` | Monaco 原生 |
+| 10 | 集成终端 | ✅ | Terminal | `oceanix-pty` + xterm.js，50ms 轮询 + ResizeObserver |
+| 11 | 分屏编辑器 | ✅ | Split Editor | Ctrl+\ 左右 / Ctrl+K Ctrl+\ 上下 |
+| 12 | Git 面板 | ✅ | Source Control | 5 个 Tauri 命令 (`git_status/diff/commit/branch_name/branches`) |
+| 13 | Git Diff 视图 | ✅ | Diff Editor | Monaco DiffEditor 并排对比 |
+| 14 | 全局搜索 | ✅ | Search | `oceanix-search` (ripgrep) + 前端结果列表 |
+| 15 | 命令面板 | ✅ | Command Palette | `@oceanix/command-palette` + 模糊搜索 |
+| 16 | 快捷键系统 | ✅ | Keybindings | `@oceanix/keybinding` + 和弦支持 |
+| 17 | 主题引擎 | ✅ | Themes | `@oceanix/theme` + VS Code 主题 JSON 兼容 |
+| 18 | LSP 客户端 | ✅ | Language Server | `oceanix-lsp` JSON-RPC stdio，预配 rust-analyzer/pyright/typescript-ls |
+| 19 | LSP 悬停提示 | ✅ | Hover | Monaco `registerHoverProvider` → `lspHover` |
+| 20 | LSP 跳转定义 | ✅ | Go to Definition | Monaco `registerDefinitionProvider` → `lspDefinition` |
+| 21 | LSP 诊断 → Problems 面板 | ✅ | Problems | 2s 轮询 `lspDiagnostics` → `ProblemsPanel` |
+| 22 | AI 内联补全 | ✅ | (独有) | `oceanix-ai` MCP bridge → Python sidecar → LLM |
+| 23 | AI 对话面板 | ✅ | Copilot Chat | `@oceanix/ai-chat` 流式对话 + token 预算 |
+| 24 | Agent 工作区 | ✅ | (独有) | `@oceanix/agent-workspace` 任务列表 + 步骤时间线 |
+| 25 | Markdown 预览 | ✅ | `markdown.showPreview` | Ctrl+Shift+V 分屏渲染 |
+| 26 | 设置 GUI | ✅ | Settings UI | 模态面板：字体/主题/Tab/Wrap/Minimap/AutoSave |
+| 27 | 会话持久化 | ✅ | Session Restore | 文件/光标/布局保存到 `session.json` |
+| 28 | 状态栏 | ✅ | Status Bar | 分支/行号/编码/缩进/语言 |
+| 29 | 活动栏 | ✅ | Activity Bar | Explorer/Search/Git/AI 四视图，lucide-react 图标 |
+| 30 | 面板区域 (Terminal/Problems/Output) | ✅ | Panel | 三 tab 可切换 |
+| 31 | 插件协议框架 | ✅ | Extensions | `oceanix-plugin` crate + `ExtensionRegistry` |
+| 32 | 自动格式化文档 | ✅ | `editor.action.formatDocument` | Shift+Alt+F |
+
+### 7.2 部分实现（有基础但未完成）
+
+| # | 功能 | 当前状态 | 缺失 |
+|---|------|---------|------|
+| 1 | LSP Code Lens | Rust 类型已定义，前端未接 | Monaco `CodeLensProvider` 注册 |
+| 2 | LSP 查找引用 | API 就绪，前端未接 | `lspReferences` Tauri 命令待添加 |
+| 3 | LSP 重命名 | API 就绪，前端未接 | `lspRename` Tauri 命令待添加 |
+| 4 | LSP 代码补全 | 仅单词 fallback | `lspCompletion` 未接线到 Monaco `CompletionItemProvider` |
+| 5 | 文件树 | 一次性递归 4 层 | 缺少按需懒加载（展开时才加载子节点） |
+| 6 | File > Open Folder | projectRoot 硬编码 cwd | 无文件夹选择对话框 |
+| 7 | 终端 | 单会话 | 多终端标签 / 终端分屏 |
+| 8 | Git | status/commit/diff | stage/unstage 单文件/代码块、分支切换 UI、push/pull |
+| 9 | 面包屑导航 | TypeScript 类型问题 | Monaco `breadcrumbs` 选项在当前版本类型不兼容 |
+| 10 | 插件系统 | 协议 + registry 完整 | manifest 文件加载、WASM/native 执行器 |
+
+### 7.3 尚未实现的核心功能
+
+| # | 功能 | 对应 VS Code | 难度 | 说明 |
+|---|------|-------------|------|------|
+| 1 | **调试器 (DAP)** | Run and Debug | 极高 | Debug Adapter Protocol 完整实现 |
+| 2 | 代码片段 (Snippets) | Snippets | 中 | 预定义/用户自定义，Tab 跳占位符 |
+| 3 | Stage / Unstage 文件块 | Source Control | 中 | 需 `git2` 文件块级别操作 |
+| 4 | 行内差异指示 (Gutter Diff) | Editor Gutter | 中 | Monaco 装订线装饰 API |
+| 5 | 文件内符号跳转 (Ctrl+Shift+O) | `@` outline | 中 | LSP `documentSymbol` 未接 |
+| 6 | 工作区符号跳转 (Ctrl+T) | `#` workspace symbol | 中 | LSP `workspaceSymbol` 未接 |
+| 7 | Peek 定义/引用 | Peek | 中 | Monaco `PeekView` API |
+| 8 | 多根工作区 | Multi-root Workspace | 中 | `.oceanix-workspace` 文件 |
+| 9 | 任务系统 | Tasks | 中 | `tasks.json` 构建/测试运行 |
+| 10 | 扩展市场 | Marketplace | 极高 | 社区 + 后端服务 |
+| 11 | 远程开发 (SSH/Container) | Remote Development | 极高 | 架构级 |
+| 12 | 文件拖拽移动 | Explorer | 低 | FileTree 拖拽事件 |
+| 13 | 欢迎页 | Welcome | 低 | 纯前端 |
+| 14 | Zen Mode | Zen Mode | 低 | 全屏 + 隐藏 UI |
+
+### 7.4 整体完成度估算
+
+| 域 | 完成度 | 注解 |
+|----|--------|------|
+| 编辑核心 | 85% | Monaco 承担大部分，缺 snippets/peek/gutter diff |
+| 文件管理 | 55% | 文件树有但缺懒加载/拖拽/面包屑/文件夹选择 |
+| 搜索替换 | 65% | 单文件+全局搜索有，缺全局替换/搜索历史 |
+| LSP / IntelliSense | 50% | 客户端完整，hover+definition+diagnostics 已接，缺 completion/references/rename/codeLens |
+| 终端 | 60% | 单会话可用，缺多标签/分屏 |
+| Git | 45% | status/diff/commit 可用，缺 stage/unstage/分支切换/push-pull |
+| AI | 70% | 补全+对话+Agent 已通，缺 RAG/Mem0/工具调用 |
+| 扩展系统 | 25% | 协议框架完整，缺加载/执行 |
+| 整体 | **~55%** | 基础编辑器可用，需补齐 Git/终端/LSP/Multi-root |

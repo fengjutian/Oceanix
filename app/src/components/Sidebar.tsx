@@ -8,6 +8,18 @@ interface SidebarProps {
   view: string;
   onOpenFile?: (tab: EditorTab) => void;
   projectRoot: string;
+  onFileTreeLoaded?: (files: Array<{ path: string; name: string }>) => void;
+}
+
+function flattenFiles(node: FileNode): Array<{ path: string; name: string }> {
+  if (node.type === "file") return [{ path: node.path, name: node.name }];
+  const result: Array<{ path: string; name: string }> = [];
+  if (node.children) {
+    for (const child of node.children) {
+      result.push(...flattenFiles(child));
+    }
+  }
+  return result;
 }
 
 // Files/dirs to skip when building the tree
@@ -54,7 +66,7 @@ async function buildFileTree(dirPath: string, dirName: string, depth: number): P
   return node;
 }
 
-export default function Sidebar({ view, onOpenFile, projectRoot }: SidebarProps) {
+export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoaded }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Array<{ file: string; line: number; text: string }>>([]);
   const [fileTree, setFileTree] = useState<FileNode | null>(null);
@@ -80,6 +92,7 @@ export default function Sidebar({ view, onOpenFile, projectRoot }: SidebarProps)
       .then((tree) => {
         if (!cancelled) {
           setFileTree(tree);
+          onFileTreeLoaded?.(flattenFiles(tree));
           setTreeLoading(false);
         }
       })

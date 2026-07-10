@@ -65,7 +65,7 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
           try {
             const result = await lspHover(tab.language, tab.path, position.lineNumber - 1, position.column - 1);
             if (result) {
-              return { contents: [{ value: result.contents }], range: undefined as unknown as editor.IRange };
+              return { contents: [{ value: result.contents }] };
             }
           } catch { /* LSP not available */ }
           return null;
@@ -122,6 +122,7 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
   // ─── LSP lifecycle ──────────────────────────────────
   const lspVersionRef = useRef(1);
 
+  // Start LSP + didOpen when language/file changes
   useEffect(() => {
     if (!activeTab || !projectRoot) return;
     if (!isLspLanguage(activeTab.language)) return;
@@ -129,24 +130,21 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
     const lang = activeTab.language;
     lspVersionRef.current = 1;
 
-    // Start LSP server for this language (idempotent)
     lspStart(lang, projectRoot).catch(() => {});
-    // Notify server about open document
     lspDidOpen(lang, activeTab.path, activeTab.content).catch(() => {});
-
-    return () => {
-      // LSP servers stay alive; no explicit close needed
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab?.language, activeTab?.path, projectRoot]);
 
   // Send didChange when content changes (debounced)
+  const contentTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     if (!activeTab || !isLspLanguage(activeTab.language)) return;
-    const timer = setTimeout(() => {
+    if (contentTimerRef.current) clearTimeout(contentTimerRef.current);
+    contentTimerRef.current = setTimeout(() => {
       lspDidChange(activeTab.language, activeTab.path, lspVersionRef.current++, activeTab.content).catch(() => {});
     }, 300);
-    return () => clearTimeout(timer);
-  }, [activeTab?.content]);
+    return () => { if (contentTimerRef.current) clearTimeout(contentTimerRef.current); };
+  }, [activeTab?.content, activeTab?.language, activeTab?.path]);
   useEffect(() => {
     if (!activeTab || !monacoRef.current) return;
     const monaco = monacoRef.current;

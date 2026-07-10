@@ -40,6 +40,11 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [projectRoot, setProjectRoot] = useState(".");
+  const [flatFiles, setFlatFiles] = useState<Array<{ path: string; name: string }>>([]);
+
+  const handleFileTreeLoaded = useCallback((files: Array<{ path: string; name: string }>) => {
+    setFlatFiles(files);
+  }, []);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const editorHandleRef = useRef<EditorTabsHandle | null>(null);
   const splitEditorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -51,6 +56,7 @@ function App() {
   const [splitTabs, setSplitTabs] = useState<EditorTab[]>([]);
   const [splitActiveTabId, setSplitActiveTabId] = useState<string | null>(null);
   const [splitVisible, setSplitVisible] = useState(false);
+  const [splitDirection, setSplitDirection] = useState<"horizontal" | "vertical">("horizontal");
 
   const openTab = useCallback((tab: EditorTab) => {
     setTabs((prev) => {
@@ -124,7 +130,29 @@ function App() {
   }, [tabs]);
 
   // ─── Quick Open ─────────────────────────────────────
-  const quickOpenCommands = useMemo<Command[]>(() => [
+  const quickOpenCommands = useMemo<Command[]>(() => {
+    const fileCommands: Command[] = flatFiles.map((f) => ({
+      id: `file:${f.path}`,
+      label: f.name,
+      category: f.path.substring(0, f.path.lastIndexOf("/") + 1) || "Files",
+      action: () => {
+        const label = f.name;
+        const ext = label.split(".").pop() || "";
+        const langMap: Record<string, string> = {
+          ts: "typescript", tsx: "typescript", rs: "rust",
+          json: "json", md: "markdown", css: "css", html: "html",
+          toml: "toml", py: "python",
+        };
+        openTab({
+          id: f.path, path: f.path, label,
+          language: langMap[ext] || "plaintext",
+          content: "", dirty: false,
+        });
+      },
+    }));
+
+    return [
+    ...fileCommands,
     {
       id: "theme.toggle",
       label: "Toggle Dark/Light Theme",
@@ -215,11 +243,32 @@ function App() {
       action: () => editorHandleRef.current?.openGitDiff(),
     },
     {
-      id: "editor.split",
+      id: "editor.splitRight",
       label: "Split Editor Right",
       category: "View",
       keybinding: "Ctrl+\\",
-      action: () => setSplitVisible((v) => !v),
+      action: () => {
+        if (splitVisible && splitDirection === "horizontal") {
+          setSplitVisible(false);
+        } else {
+          setSplitVisible(true);
+          setSplitDirection("horizontal");
+        }
+      },
+    },
+    {
+      id: "editor.splitDown",
+      label: "Split Editor Down",
+      category: "View",
+      keybinding: "Ctrl+K Ctrl+\\",
+      action: () => {
+        if (splitVisible && splitDirection === "vertical") {
+          setSplitVisible(false);
+        } else {
+          setSplitVisible(true);
+          setSplitDirection("vertical");
+        }
+      },
     },
     {
       id: "search.global",
@@ -228,7 +277,8 @@ function App() {
       keybinding: "Ctrl+Shift+F",
       action: () => setSidebarView("search"),
     },
-  ], [activeTabId, saveTab, closeTab, openTab]);
+  ];
+}, [activeTabId, saveTab, closeTab, openTab, flatFiles]);
 
   // Always holds the latest commands so the keybinding registry
   // never needs to be rebuilt when command actions change.
@@ -316,6 +366,7 @@ function App() {
                   view={sidebarView}
                   onOpenFile={openTab}
                   projectRoot={projectRoot}
+                  onFileTreeLoaded={handleFileTreeLoaded}
                 />
               </Panel>
               <PanelResizeHandle className="resize-handle" />
@@ -323,46 +374,42 @@ function App() {
           )}
           <Panel minSize={30}>
             <PanelGroup direction="vertical">
-              <Panel minSize={20}>
-                <EditorTabs
-                  ref={editorHandleRef}
-                  tabs={tabs}
-                  activeTabId={activeTabId}
-                  onSelectTab={setActiveTabId}
-                  onCloseTab={closeTab}
-                  onContentChange={updateContent}
-                  onSave={saveTab}
-                  editorRef={editorRef}
-                  projectRoot={projectRoot}
-                />
-              </Panel>
-              {splitVisible && (
-                <>
-                  <PanelResizeHandle className="resize-handle" />
-                  <Panel minSize={20}>
+              {/* Editor area — single or split */}
+              {splitVisible ? (
+                <PanelGroup direction={splitDirection === "horizontal" ? "horizontal" : "vertical"} style={{ flex: "none", height: panelVisible ? undefined : "100%" }}>
+                  <Panel defaultSize={50} minSize={20}>
                     <EditorTabs
-                      ref={splitHandleRef}
-                      tabs={splitTabs}
-                      activeTabId={splitActiveTabId}
-                      onSelectTab={setSplitActiveTabId}
-                      onCloseTab={(id) => {
-                        setSplitTabs((prev) => prev.filter((t) => t.id !== id));
-                      }}
-                      onContentChange={(id, content) => {
-                        setSplitTabs((prev) =>
-                          prev.map((t) => (t.id === id ? { ...t, content, dirty: true } : t))
-                        );
-                      }}
-                      onSave={(id) => {
-                        setSplitTabs((prev) =>
-                          prev.map((t) => (t.id === id ? { ...t, dirty: false } : t))
-                        );
-                      }}
-                      editorRef={splitEditorRef}
-                      projectRoot={projectRoot}
+                      ref={editorHandleRef} tabs={tabs} activeTabId={activeTabId}
+                      onSelectTab={setActiveTabId} onCloseTab={closeTab}
+                      onContentChange={updateContent} onSave={saveTab}
+                      editorRef={editorRef} projectRoot={projectRoot}
                     />
                   </Panel>
-                </>
+                  <PanelResizeHandle className="resize-handle" />
+                  <Panel defaultSize={50} minSize={20}>
+                    <EditorTabs
+                      ref={splitHandleRef} tabs={splitTabs} activeTabId={splitActiveTabId}
+                      onSelectTab={setSplitActiveTabId}
+                      onCloseTab={(id) => setSplitTabs((prev) => prev.filter((t) => t.id !== id))}
+                      onContentChange={(id, content) => setSplitTabs((prev) =>
+                        prev.map((t) => (t.id === id ? { ...t, content, dirty: true } : t))
+                      )}
+                      onSave={(id) => setSplitTabs((prev) =>
+                        prev.map((t) => (t.id === id ? { ...t, dirty: false } : t))
+                      )}
+                      editorRef={splitEditorRef} projectRoot={projectRoot}
+                    />
+                  </Panel>
+                </PanelGroup>
+              ) : (
+                <Panel minSize={20}>
+                  <EditorTabs
+                    ref={editorHandleRef} tabs={tabs} activeTabId={activeTabId}
+                    onSelectTab={setActiveTabId} onCloseTab={closeTab}
+                    onContentChange={updateContent} onSave={saveTab}
+                    editorRef={editorRef} projectRoot={projectRoot}
+                  />
+                </Panel>
               )}
               {panelVisible && (
                 <>

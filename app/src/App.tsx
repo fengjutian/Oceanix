@@ -3,7 +3,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
 import ActivityBar from "./components/ActivityBar";
-import EditorTabs, { EditorTab } from "./components/EditorTabs";
+import EditorTabs, { EditorTab, type EditorTabsHandle } from "./components/EditorTabs";
 import Terminal from "./components/Terminal";
 import GitPanel from "./components/GitPanel";
 import ProblemsPanel from "./components/ProblemsPanel";
@@ -28,6 +28,7 @@ const DEFAULT_BINDINGS: KeyBinding[] = [
   { key: "Ctrl+J", command: "panel.toggle", label: "Toggle Panel" },
   { key: "Ctrl+K Ctrl+T", command: "theme.toggle", label: "Toggle Theme" },
   { key: "Shift+Alt+F", command: "editor.format", label: "Format Document" },
+  { key: "Ctrl+Shift+V", command: "markdown.preview", label: "Markdown Preview" },
 ];
 
 function App() {
@@ -40,6 +41,7 @@ function App() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [projectRoot, setProjectRoot] = useState(".");
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const editorHandleRef = useRef<EditorTabsHandle | null>(null);
 
   // ─── Tab management ─────────────────────────────────
   const [tabs, setTabs] = useState<EditorTab[]>([]);
@@ -194,6 +196,20 @@ function App() {
       action: () => setShowSettings(true),
     },
     {
+      id: "markdown.preview",
+      label: "Toggle Markdown Preview",
+      category: "View",
+      keybinding: "Ctrl+Shift+V",
+      action: () => editorHandleRef.current?.toggleMarkdownPreview(),
+    },
+    {
+      id: "git.showDiff",
+      label: "Show Git Diff",
+      category: "Git",
+      keybinding: "Ctrl+Shift+D",
+      action: () => editorHandleRef.current?.openGitDiff(),
+    },
+    {
       id: "search.global",
       label: "Global Search",
       category: "Search",
@@ -297,6 +313,7 @@ function App() {
             <PanelGroup direction="vertical">
               <Panel minSize={20}>
                 <EditorTabs
+                  ref={editorHandleRef}
                   tabs={tabs}
                   activeTabId={activeTabId}
                   onSelectTab={setActiveTabId}

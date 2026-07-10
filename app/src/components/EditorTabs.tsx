@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from "react";
 import Editor, { OnMount, DiffEditor } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { aiComplete } from "../services/api";
@@ -12,6 +12,11 @@ export interface EditorTab {
   dirty: boolean;
 }
 
+export interface EditorTabsHandle {
+  toggleMarkdownPreview: () => void;
+  openGitDiff: () => void;
+}
+
 interface EditorTabsProps {
   tabs: EditorTab[];
   activeTabId: string | null;
@@ -22,7 +27,7 @@ interface EditorTabsProps {
   editorRef?: React.MutableRefObject<editor.IStandaloneCodeEditor | null>;
 }
 
-export default function EditorTabs({
+const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function EditorTabs({
   tabs,
   activeTabId,
   onSelectTab,
@@ -30,7 +35,7 @@ export default function EditorTabs({
   onContentChange,
   onSave,
   editorRef,
-}: EditorTabsProps) {
+}, ref) {
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
   const [splitMode, setSplitMode] = useState<"markdown" | null>(null);
@@ -46,6 +51,25 @@ export default function EditorTabs({
     },
     [editorRef]
   );
+
+  const toggleMarkdownPreview = useCallback(() => {
+    setSplitMode((prev) => (prev === "markdown" ? null : "markdown"));
+    setShowDiff(false);
+  }, []);
+
+  const openGitDiff = useCallback(() => {
+    if (!activeTab) return;
+    setDiffOriginal("");
+    setDiffModified(activeTab.content);
+    setShowDiff(true);
+    setSplitMode(null);
+  }, [activeTab]);
+
+  // Expose methods to parent
+  useImperativeHandle(ref, () => ({
+    toggleMarkdownPreview,
+    openGitDiff,
+  }), [toggleMarkdownPreview, openGitDiff]);
 
   // Re-register inline completions whenever the active tab's language changes
   useEffect(() => {
@@ -103,45 +127,99 @@ export default function EditorTabs({
         ))}
       </div>
 
-      {/* Editor */}
-      {activeTab ? (
-        <Editor
-          height="100%"
-          language={activeTab.language}
-          value={activeTab.content}
-          theme="vs-dark"
-          onChange={(value) => onContentChange(activeTab.id, value || "")}
-          onMount={handleEditorMount}
-          loading={<div className="editor-loading">Loading editor...</div>}
-          options={{
-            fontSize: 14,
-            fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
-            automaticLayout: true,
-            minimap: { enabled: true },
-            folding: true,
-            lineNumbers: "on",
-            renderWhitespace: "selection",
-            tabSize: 2,
-            insertSpaces: true,
-            wordWrap: "off",
-            bracketPairColorization: { enabled: true },
-            autoClosingBrackets: "always",
-            autoIndent: "full",
-            formatOnPaste: true,
-            suggest: { showWords: true },
-            smoothScrolling: true,
-            cursorBlinking: "smooth",
-            cursorSmoothCaretAnimation: "on",
-          }}
-        />
-      ) : (
-        <div className="editor-empty">
-          <div className="empty-state">
-            <h1>Oceanix</h1>
-            <p>Ctrl+O to open a file or folder</p>
-          </div>
+      {/* Editor with optional split pane */}
+      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+        {/* Main editor */}
+        <div style={{ flex: (showDiff || splitMode) ? 0.5 : 1, minWidth: 0, height: "100%" }}>
+          {activeTab ? (
+            <Editor
+              height="100%"
+              language={activeTab.language}
+              value={activeTab.content}
+              theme="vs-dark"
+              onChange={(value) => onContentChange(activeTab.id, value || "")}
+              onMount={handleEditorMount}
+              loading={<div className="editor-loading">Loading editor...</div>}
+              options={{
+                fontSize: 14,
+                fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
+                automaticLayout: true,
+                minimap: { enabled: !showDiff && !splitMode },
+                folding: true,
+                lineNumbers: "on",
+                renderWhitespace: "selection",
+                tabSize: 2,
+                insertSpaces: true,
+                wordWrap: "off",
+                bracketPairColorization: { enabled: true },
+                autoClosingBrackets: "always",
+                autoIndent: "full",
+                formatOnPaste: true,
+                suggest: { showWords: true },
+                smoothScrolling: true,
+                cursorBlinking: "smooth",
+                cursorSmoothCaretAnimation: "on",
+              }}
+            />
+          ) : (
+            <div className="editor-empty">
+              <div className="empty-state">
+                <h1>Oceanix</h1>
+                <p>Ctrl+O to open a file or folder</p>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Split pane: Markdown preview */}
+        {splitMode === "markdown" && activeTab && (
+          <>
+            <div style={{ width: 4, cursor: "col-resize", background: "var(--border-color)" }} />
+            <div style={{ flex: 0.5, minWidth: 0, height: "100%", overflow: "auto",
+              padding: "12px 16px", background: "var(--bg-primary)", color: "var(--text-primary)",
+              fontFamily: "system-ui, sans-serif", fontSize: 14, lineHeight: 1.7,
+            }}
+              dangerouslySetInnerHTML={{
+                __html: activeTab.content
+                  .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+                  .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+                  .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+                  .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                  .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                  .replace(/`([^`]+)`/g, '<code>$1</code>')
+                  .replace(/\n\n/g, '<br/><br/>')
+                  .replace(/\n/g, '<br/>')
+              }}
+            />
+          </>
+        )}
+
+        {/* Split pane: Git diff */}
+        {showDiff && activeTab && (
+          <>
+            <div style={{ width: 4, cursor: "col-resize", background: "var(--border-color)" }} />
+            <div style={{ flex: 0.5, minWidth: 0, height: "100%" }}>
+              <DiffEditor
+                height="100%"
+                language={activeTab.language}
+                original={diffOriginal}
+                modified={diffModified}
+                theme="vs-dark"
+                options={{
+                  readOnly: true,
+                  renderSideBySide: true,
+                  minimap: { enabled: false },
+                  fontSize: 13,
+                  fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
+                  automaticLayout: true,
+                }}
+              />
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
-}
+});
+
+export default EditorTabs;

@@ -57,7 +57,7 @@ impl AiBridge {
 
     /// Start the Python sidecar process
     pub fn start(&mut self) -> Result<(), String> {
-        let child = ["oceanix-ai", "python", "python3"]
+        let mut child = ["oceanix-ai", "python", "python3"]
             .iter()
             .find_map(|bin| {
                 Command::new(bin)

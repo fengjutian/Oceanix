@@ -1,0 +1,11 @@
+[package]
+name = "oceanix-ai"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tokio.workspace = true
+tracing.workspace = true
+keyring-rs = "3"

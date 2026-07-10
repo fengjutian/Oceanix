@@ -1,0 +1,13 @@
+{
+  "name": "oceanix",
+  "private": true,
+  "workspaces": [
+    "app",
+    "packages/file-tree",
+    "packages/command-palette",
+    "packages/keybinding",
+    "packages/theme",
+    "packages/ai-chat",
+    "packages/agent-workspace"
+  ]
+}

@@ -1,0 +1,225 @@
+:root {
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #252526;
+  --bg-tertiary: #2d2d30;
+  --border-color: #3e3e42;
+  --text-primary: #cccccc;
+  --text-secondary: #858585;
+  --accent: #007acc;
+  --activity-bar-width: 48px;
+  --status-bar-height: 22px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+.app-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Activity Bar */
+.activity-bar {
+  width: var(--activity-bar-width);
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 8px;
+  border-right: 1px solid var(--border-color);
+}
+
+.activity-btn {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+
+.activity-btn:hover { color: var(--text-primary); }
+.activity-btn.active { color: var(--text-primary); border-left-color: var(--accent); }
+
+/* Sidebar */
+.sidebar {
+  background: var(--bg-secondary);
+  height: 100%;
+  overflow-y: auto;
+}
+
+.sidebar-content { padding: 12px; color: var(--text-secondary); }
+
+/* Resize handle */
+.resize-handle {
+  width: 4px;
+  background: var(--border-color);
+  transition: background 0.15s;
+  cursor: col-resize;
+}
+.resize-handle[data-panel-group-direction="vertical"] {
+  width: auto;
+  height: 4px;
+  cursor: row-resize;
+}
+.resize-handle:hover, .resize-handle[data-resize-handle-active] { background: var(--accent); }
+
+/* Panel (Terminal / Problems) */
+.panel-container { height: 100%; display: flex; flex-direction: column; }
+
+.panel-tabs {
+  display: flex;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+.panel-tab {
+  padding: 4px 12px;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+}
+.panel-tab.active { color: var(--text-primary); border-bottom-color: var(--accent); }
+.panel-tab:hover { color: var(--text-primary); }
+
+.panel-content {
+  flex: 1;
+  background: var(--bg-primary);
+  padding: 8px 12px;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  overflow-y: auto;
+}
+
+/* Status Bar */
+.status-bar {
+  height: var(--status-bar-height);
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 12px;
+  gap: 16px;
+}
+
+.status-item { white-space: nowrap; }
+
+/* ─── Tab Bar ──────────────────────────────────── */
+
+.tab-bar {
+  display: flex;
+  background: var(--bg-secondary);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-right: 1px solid var(--border-color);
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.tab:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+.tab.active {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border-bottom: 2px solid var(--accent);
+}
+
+.tab-label { overflow: hidden; text-overflow: ellipsis; }
+.tab-dirty { color: var(--accent); margin-right: 4px; font-size: 10px; }
+
+.tab-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  margin-left: 8px;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+.tab-close:hover { color: var(--text-primary); background: rgba(255,255,255,0.1); }
+
+/* ─── Editor Area ──────────────────────────────── */
+
+.editor-area {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+.editor-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.empty-state h1 {
+  font-size: 48px;
+  font-weight: 300;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.empty-state p {
+  font-size: 14px;
+}
+
+/* ─── Activity Bar Tooltip ─────────────────────── */
+
+.activity-btn {
+  position: relative;
+}
+
+.activity-btn:hover::after {
+  content: attr(title);
+  position: absolute;
+  left: 52px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 100;
+  pointer-events: none;
+}

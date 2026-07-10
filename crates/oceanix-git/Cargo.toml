@@ -1,0 +1,10 @@
+[package]
+name = "oceanix-git"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tracing.workspace = true
+git2 = "0.19"

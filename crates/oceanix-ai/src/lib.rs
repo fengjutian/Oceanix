@@ -65,7 +65,7 @@ impl AiBridge {
             return Err("AI sidecar not running".into());
         }
 
-        let id = uuid_v4();
+        let id = req_id();
         let request = serde_json::json!({
             "jsonrpc": "2.0",
             "id": id,
@@ -140,8 +140,8 @@ impl SharedAiBridge {
     }
 }
 
-/// Generate a simple UUID v4
-fn uuid_v4() -> String {
+/// Generate a unique request ID (timestamp-based, not RFC 4122 UUID)
+fn req_id() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)

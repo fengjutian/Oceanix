@@ -108,18 +108,31 @@ impl SearchEngine {
                 }
             }
 
-            // Read and search
-            match std::fs::read_to_string(path) {
-                Ok(contents) => {
-                    Self::search_in_file(
-                        &re,
-                        path_str,
-                        &contents,
-                        params.max_results,
-                        &mut results,
-                    );
+            // Read and search line-by-line
+            match std::fs::File::open(path) {
+                Ok(file) => {
+                    use std::io::{BufRead, BufReader};
+                    let reader = BufReader::new(file);
+                    for (line_idx, line) in reader.lines().enumerate() {
+                        match line {
+                            Ok(line_text) => {
+                                Self::search_in_line(
+                                    &re,
+                                    path_str,
+                                    line_idx + 1,
+                                    &line_text,
+                                    params.max_results,
+                                    &mut results,
+                                );
+                                if results.len() >= params.max_results {
+                                    break;
+                                }
+                            }
+                            Err(err) => debug!("line read error: {err}"),
+                        }
+                    }
                 }
-                Err(err) => debug!("cannot read {path_str}: {err}"),
+                Err(err) => debug!("cannot open {path_str}: {err}"),
             }
 
             if results.len() >= params.max_results {
@@ -140,27 +153,26 @@ impl SearchEngine {
             .build()
     }
 
-    fn search_in_file(
+    fn search_in_line(
         re: &Regex,
         file_path: &str,
-        contents: &str,
+        line_number: usize,
+        line_text: &str,
         max: usize,
         results: &mut Vec<SearchMatch>,
     ) {
-        for (line_idx, line_text) in contents.lines().enumerate() {
-            for m in re.find_iter(line_text) {
-                if results.len() >= max {
-                    return;
-                }
-                results.push(SearchMatch {
-                    file_path: file_path.to_string(),
-                    line_number: line_idx + 1,
-                    column: m.start() + 1,
-                    line_text: line_text.to_string(),
-                    match_start: m.start(),
-                    match_end: m.end(),
-                });
+        for m in re.find_iter(line_text) {
+            if results.len() >= max {
+                return;
             }
+            results.push(SearchMatch {
+                file_path: file_path.to_string(),
+                line_number,
+                column: m.start() + 1,
+                line_text: line_text.to_string(),
+                match_start: m.start(),
+                match_end: m.end(),
+            });
         }
     }
 }

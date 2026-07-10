@@ -112,7 +112,12 @@ impl PtySession {
         Ok(SpawnResult { id, pid })
     }
 
-    /// Non-blocking read from a session. Returns available bytes (empty if none).
+    /// Read output from the PTY.
+    ///
+    /// # Platform notes
+    /// On Unix: uses non-blocking read via `try_clone_reader`. Empty result means no data.
+    /// On Windows: `try_clone_reader` may block briefly. Consider wrapping in a timeout
+    /// if called from the main Tauri thread (Phase 2 improvement).
     #[tracing::instrument(skip(self))]
     pub fn read(&self, id: &str) -> Result<Vec<u8>, String> {
         let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;

@@ -112,29 +112,21 @@ impl PtySession {
         Ok(SpawnResult { id, pid })
     }
 
-    /// Read output from the PTY.
-    ///
-    /// # Platform notes
-    /// On Unix: uses non-blocking read via `try_clone_reader`. Empty result means no data.
-    /// On Windows: `try_clone_reader` may block briefly. Consider wrapping in a timeout
-    /// if called from the main Tauri thread (Phase 2 improvement).
+    /// Read output from the PTY (lock released before I/O).
     #[tracing::instrument(skip(self))]
     pub fn read(&self, id: &str) -> Result<Vec<u8>, String> {
-        let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
-        let handle = sessions.get_mut(id).ok_or_else(|| {
-            warn!(%id, "read on unknown session");
-            format!("session {id} not found")
-        })?;
+        let mut reader = {
+            let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
+            let handle = sessions.get_mut(id).ok_or_else(|| {
+                format!("session {id} not found")
+            })?;
+            handle.master.try_clone_reader().map_err(|e| e.to_string())?
+        };
 
         let mut buf = [0u8; 8192];
-        match handle.reader.read(&mut buf) {
+        match reader.read(&mut buf) {
             Ok(n) if n > 0 => Ok(buf[..n].to_vec()),
-            Ok(_) => Ok(Vec::new()),
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(Vec::new()),
-            Err(e) => {
-                error!(%id, "read error: {e}");
-                Err(e.to_string())
-            }
+            _ => Ok(Vec::new()), // WouldBlock or error → empty
         }
     }
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Terminal as XTerm } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
@@ -9,16 +9,22 @@ interface TerminalProps {
 }
 
 export default function Terminal({ id }: TerminalProps) {
-  console.log("[STARTUP] Terminal mount", Math.round(performance.now()) + "ms id=" + id);
+  const [mounted, setMounted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const termIdRef = useRef<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Lazy mount — defer xterm init to avoid blocking initial paint
   useEffect(() => {
-    if (!containerRef.current) return;
-    console.log("[STARTUP] Terminal useEffect start", Math.round(performance.now()) + "ms");
+    const t = setTimeout(() => setMounted(true), 500);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted || !containerRef.current) return;
+    let cancelled = false;
 
     const term = new XTerm({
       cursorBlink: true,
@@ -30,7 +36,6 @@ export default function Terminal({ id }: TerminalProps) {
         cursor: "#cccccc",
         selectionBackground: "#264f78",
       },
-      allowProposedApi: true,
     });
 
     const fitAddon = new FitAddon();
@@ -44,10 +49,7 @@ export default function Terminal({ id }: TerminalProps) {
     const handleResize = () => fitAddon.fit();
     window.addEventListener("resize", handleResize);
 
-    // Set up PTY connection — deferred to avoid blocking startup
-    let cancelled = false;
-
-    // Defer PTY creation by 2s so the UI can render first
+    // PTY spawn + slow poll via setTimeout chain (avoids flooding IPC)
     const ptyTimer = setTimeout(async () => {
       if (cancelled) return;
       try {
@@ -55,31 +57,23 @@ export default function Terminal({ id }: TerminalProps) {
         if (cancelled) return;
         termIdRef.current = result.id;
 
-        // Poll for PTY output
         pollTimerRef.current = setInterval(async () => {
           if (cancelled) return;
           try {
             const data = await terminalRead(result.id);
-            if (data && termRef.current) {
-              termRef.current.write(data);
-            }
-          } catch {
-            // Ignore read errors
-          }
-        }, 50); // Poll every 50ms
+            if (data && termRef.current) termRef.current.write(data);
+          } catch { /* ignore */ }
+        }, 50);
 
-        // Forward user input to PTY
         term.onData((data) => {
           if (!cancelled && termIdRef.current) {
             terminalWrite(termIdRef.current, data).catch(() => {});
           }
         });
 
-        // Handle terminal resize
         const resizeObserver = new ResizeObserver(() => {
           if (termRef.current && fitAddonRef.current) {
             fitAddonRef.current.fit();
-            // Tauri PTY resize
             if (termIdRef.current && termRef.current) {
               const dims = fitAddon.proposeDimensions();
               if (dims?.cols && dims?.rows) {
@@ -88,31 +82,23 @@ export default function Terminal({ id }: TerminalProps) {
             }
           }
         });
-        if (containerRef.current) {
-          resizeObserver.observe(containerRef.current);
-        }
+        if (containerRef.current) resizeObserver.observe(containerRef.current);
       } catch (err) {
         if (!cancelled && termRef.current) {
-          termRef.current.writeln(`Failed to start terminal: ${err}`);
+          termRef.current.writeln("Terminal unavailable: " + String(err));
         }
       }
     }, 2000);
 
     return () => {
       cancelled = true;
+      clearTimeout(ptyTimer);
       window.removeEventListener("resize", handleResize);
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-      if (termIdRef.current) {
-        terminalKill(termIdRef.current).catch(() => {});
-      }
+      if (termIdRef.current) terminalKill(termIdRef.current).catch(() => {});
       term.dispose();
     };
-  }, [id]);
+  }, [mounted, id]);
 
-  return (
-    <div
-      ref={containerRef}
-      style={{ height: "100%", width: "100%" }}
-    />
-  );
+  return <div ref={containerRef} style={{ height: "100%", width: "100%" }} />;
 }

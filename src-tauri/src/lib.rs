@@ -2,6 +2,7 @@ mod commands;
 
 use commands::AiState;
 use std::sync::Mutex;
+use std::sync::Arc;
 use std::collections::HashMap;
 use oceanix_pty::PtySession;
 use oceanix_plugin::PluginRegistry;
@@ -16,7 +17,7 @@ pub struct GitState {
 }
 
 pub struct PtyState {
-    pub pty: Mutex<PtySession>,
+    pub pty: Arc<Mutex<PtySession>>,
 }
 
 pub struct LspState {
@@ -29,9 +30,6 @@ pub struct PluginState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let startup = std::time::Instant::now();
-    eprintln!("[STARTUP] Initializing tracing... (+{:?})", startup.elapsed());
-
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
@@ -39,11 +37,9 @@ pub fn run() {
         .json()
         .init();
 
-    eprintln!("[STARTUP] Creating managed state... (+{:?})", startup.elapsed());
     let ai_state = AiState {
         bridge: Mutex::new(oceanix_ai::AiBridge::new()),
     };
-    eprintln!("[STARTUP] ai_state done (+{:?})", startup.elapsed());
 
     let git_state = GitState {
         project_root: Mutex::new(
@@ -52,24 +48,19 @@ pub fn run() {
                 .map(|p| p.to_string_lossy().to_string())
         ),
     };
-    eprintln!("[STARTUP] git_state done (+{:?})", startup.elapsed());
 
     let pty_state = PtyState {
-        pty: Mutex::new(PtySession::new()),
+        pty: Arc::new(Mutex::new(PtySession::new())),
     };
-    eprintln!("[STARTUP] pty_state done (+{:?})", startup.elapsed());
 
     let lsp_state = LspState {
         clients: Mutex::new(HashMap::new()),
     };
-    eprintln!("[STARTUP] lsp_state done (+{:?})", startup.elapsed());
 
     let plugin_state = PluginState {
         registry: Mutex::new(PluginRegistry::new()),
     };
-    eprintln!("[STARTUP] plugin_state done (+{:?})", startup.elapsed());
 
-    eprintln!("[STARTUP] Building Tauri... (+{:?})", startup.elapsed());
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .manage(ai_state)
@@ -119,10 +110,6 @@ pub fn run() {
             commands::plugin_contributions,
             commands::get_cwd,
         ])
-        .setup(|_app| {
-            eprintln!("[STARTUP] Tauri setup callback");
-            Ok(())
-        })
         .run(tauri::generate_context!())
         .expect("error while running Oceanix");
 }

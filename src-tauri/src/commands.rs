@@ -31,7 +31,6 @@ pub fn file_write(path: String, content: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn file_read_dir(path: String) -> Result<Vec<FileEntry>, String> {
-    let start = std::time::Instant::now();
     let entries = std::fs::read_dir(&path).map_err(|e| format!("ReadDir error: {e}"))?;
     let mut result = Vec::new();
     for entry in entries {
@@ -44,10 +43,6 @@ pub fn file_read_dir(path: String) -> Result<Vec<FileEntry>, String> {
         });
     }
     result.sort_by(|a, b| a.name.cmp(&b.name));
-    let elapsed = start.elapsed();
-    if elapsed.as_millis() > 50 {
-        eprintln!("[PERF] file_read_dir({path}) took {elapsed:?} — {} entries", result.len());
-    }
     Ok(result)
 }
 
@@ -228,43 +223,51 @@ pub struct TerminalCreateResult {
 }
 
 #[tauri::command]
-pub fn terminal_create(shell: Option<String>, state: tauri::State<'_, crate::PtyState>) -> Result<TerminalCreateResult, String> {
-    let start = std::time::Instant::now();
-    eprintln!("[PERF] terminal_create starting...");
-    let lock_start = std::time::Instant::now();
-    let session = state.pty.lock().map_err(|e| format!("lock: {e}"))?;
-    eprintln!("[PERF] terminal_create lock acquired in {:?}", lock_start.elapsed());
-
-    let spawn_start = std::time::Instant::now();
-    let result = session.spawn(shell.as_deref())?;
-    eprintln!("[PERF] terminal_create spawn done in {:?} (total {:?})", spawn_start.elapsed(), start.elapsed());
+pub async fn terminal_create(shell: Option<String>, state: tauri::State<'_, crate::PtyState>) -> Result<TerminalCreateResult, String> {
+    let pty = state.pty.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let session = pty.lock().map_err(|e| format!("lock: {e}"))?;
+        session.spawn(shell.as_deref())
+    }).await.map_err(|e| format!("spawn_blocking: {e}"))??;
 
     Ok(TerminalCreateResult { id: result.id, pid: result.pid })
 }
 
 #[tauri::command]
-pub fn terminal_write(id: String, data: String, state: tauri::State<'_, crate::PtyState>) -> Result<(), String> {
-    let session = state.pty.lock().map_err(|e| format!("lock: {e}"))?;
-    session.write(&id, data.as_bytes())
+pub async fn terminal_write(id: String, data: String, state: tauri::State<'_, crate::PtyState>) -> Result<(), String> {
+    let pty = state.pty.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let session = pty.lock().map_err(|e| format!("lock: {e}"))?;
+        session.write(&id, data.as_bytes())
+    }).await.map_err(|e| format!("spawn_blocking: {e}"))?
 }
 
 #[tauri::command]
-pub fn terminal_read(id: String, state: tauri::State<'_, crate::PtyState>) -> Result<String, String> {
-    let session = state.pty.lock().map_err(|e| format!("lock: {e}"))?;
-    let data = session.read(&id)?;
+pub async fn terminal_read(id: String, state: tauri::State<'_, crate::PtyState>) -> Result<String, String> {
+    let pty = state.pty.clone();
+    let data = tauri::async_runtime::spawn_blocking(move || {
+        let session = pty.lock().map_err(|e| format!("lock: {e}"))?;
+        session.read(&id)
+    }).await.map_err(|e| format!("spawn_blocking: {e}"))??;
     Ok(String::from_utf8_lossy(&data).to_string())
 }
 
 #[tauri::command]
-pub fn terminal_resize(id: String, cols: u16, rows: u16, state: tauri::State<'_, crate::PtyState>) -> Result<(), String> {
-    let session = state.pty.lock().map_err(|e| format!("lock: {e}"))?;
-    session.resize(&id, cols, rows)
+pub async fn terminal_resize(id: String, cols: u16, rows: u16, state: tauri::State<'_, crate::PtyState>) -> Result<(), String> {
+    let pty = state.pty.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let session = pty.lock().map_err(|e| format!("lock: {e}"))?;
+        session.resize(&id, cols, rows)
+    }).await.map_err(|e| format!("spawn_blocking: {e}"))?
 }
 
 #[tauri::command]
-pub fn terminal_kill(id: String, state: tauri::State<'_, crate::PtyState>) -> Result<(), String> {
-    let session = state.pty.lock().map_err(|e| format!("lock: {e}"))?;
-    session.kill(&id)
+pub async fn terminal_kill(id: String, state: tauri::State<'_, crate::PtyState>) -> Result<(), String> {
+    let pty = state.pty.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let session = pty.lock().map_err(|e| format!("lock: {e}"))?;
+        session.kill(&id)
+    }).await.map_err(|e| format!("spawn_blocking: {e}"))?
 }
 
 // ─── Recent Projects ──────────────────────────────────

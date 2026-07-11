@@ -32,41 +32,6 @@ const DEFAULT_BINDINGS: KeyBinding[] = [
 ];
 
 function App() {
-  console.log("[STARTUP] App render start", Math.round(performance.now()) + "ms");
-
-  // Keep debug overlay visible but minimal — shows if anything blocks
-  useEffect(() => {
-    const overlay = document.getElementById("debug-overlay");
-    if (overlay) {
-      console.log("[STARTUP] React mounted");
-      overlay.style.cssText = "position:fixed;top:4px;right:4px;z-index:99999;background:rgba(0,0,0,0.85);color:#0f0;font-family:monospace;font-size:11px;padding:6px 10px;border-radius:4px;max-width:300px;pointer-events:none;";
-      const logEl = document.getElementById("debug-log");
-      if (logEl) {
-        // Keep only last 8 lines
-        const lines = logEl.querySelectorAll("div");
-        const keep = Math.max(0, lines.length - 8);
-        for (let i = 0; i < keep; i++) lines[i].remove();
-      }
-      // Update with live counter
-      let counter = 0;
-      setInterval(() => {
-        counter++;
-        const counterEl = document.getElementById("debug-counter");
-        if (counterEl) counterEl.textContent = ` | +${counter}s`;
-      }, 1000);
-      const counterSpan = document.createElement("span");
-      counterSpan.id = "debug-counter";
-      counterSpan.textContent = " | +0s";
-      overlay.appendChild(counterSpan);
-
-      // If React is still alive after 5s, shrink further
-      setTimeout(() => {
-        overlay.style.fontSize = "10px";
-        overlay.style.padding = "4px 6px";
-        overlay.style.opacity = "0.6";
-      }, 5000);
-    }
-  }, []);
   const [sidebarView, setSidebarView] = useState("explorer");
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(true);
@@ -137,7 +102,6 @@ function App() {
   useEffect(() => {
     const dirtyTabs = tabs.filter((t) => t.dirty && t.path && !t.path.startsWith("untitled-"));
     for (const tab of dirtyTabs) {
-      // Skip if already scheduled or content unchanged from last save
       if (autoSaveTimers.current.has(tab.id)) continue;
       if (lastSavedContent.current.get(tab.path) === tab.content) continue;
 
@@ -147,15 +111,13 @@ function App() {
           lastSavedContent.current.set(tab.path, tab.content);
           saveTab(tab.id);
         } catch {
-          // File may not exist yet — skip
         }
         autoSaveTimers.current.delete(tab.id);
-      }, 1500); // 1.5s debounce
+      }, 1500);
 
       autoSaveTimers.current.set(tab.id, timer);
     }
 
-    // Cleanup timers for closed tabs
     for (const [id, timer] of autoSaveTimers.current) {
       if (!dirtyTabs.find((t) => t.id === id)) {
         clearTimeout(timer);
@@ -326,9 +288,7 @@ function App() {
 
   // ─── Session restore ─────────────────────────────────
   useEffect(() => {
-    console.log("[STARTUP] Session restore effect", performance.now().toFixed(0) + "ms");
     loadSession().then((session) => {
-      console.log("[STARTUP] Session loaded", performance.now().toFixed(0) + "ms", session?.openFiles?.length, "files");
       if (session?.openFiles?.length) {
         const restoredTabs: EditorTab[] = session.openFiles.map((path, i) => ({
           id: `restored-${i}`,

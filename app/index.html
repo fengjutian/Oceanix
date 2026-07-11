@@ -7,40 +7,7 @@
     <title>Oceanix</title>
   </head>
   <body>
-    <div id="debug-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:#1e1e1e;color:#0f0;font-family:monospace;font-size:12px;padding:16px;overflow:auto;display:flex;flex-direction:column;gap:2px;">
-      <div id="debug-log">⏳ Loading Oceanix...</div>
-    </div>
     <div id="root"></div>
-    <script>
-      // Startup debug — visible even before React mounts
-      const logEl = document.getElementById('debug-log');
-      const t0 = performance.now();
-      const origConsole = { log: console.log, error: console.error, warn: console.warn };
-      function addLog(msg) {
-        const div = document.createElement('div');
-        div.textContent = msg;
-        logEl.appendChild(div);
-      }
-      // Intercept console
-      console.log = function(...args) {
-        origConsole.log.apply(console, args);
-        const t = (performance.now() - t0).toFixed(0);
-        addLog('[' + t + 'ms] LOG: ' + args.join(' '));
-      };
-      console.error = function(...args) {
-        origConsole.error.apply(console, args);
-        addLog('[' + (performance.now()-t0).toFixed(0) + 'ms] ❌ ERROR: ' + args.join(' '));
-      };
-      console.warn = function(...args) {
-        origConsole.warn.apply(console, args);
-        addLog('[' + (performance.now()-t0).toFixed(0) + 'ms] ⚠️ WARN: ' + args.join(' '));
-      };
-      window.onerror = function(msg, src, line, col, err) {
-        addLog('[' + (performance.now()-t0).toFixed(0) + 'ms] 💥 FATAL: ' + msg + ' at ' + src + ':' + line);
-        return false;
-      };
-      addLog('[' + (performance.now()-t0).toFixed(0) + 'ms] Page loaded');
-    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

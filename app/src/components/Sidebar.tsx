@@ -67,7 +67,6 @@ async function buildFileTree(dirPath: string, dirName: string, depth: number): P
 }
 
 export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoaded }: SidebarProps) {
-  console.log("[STARTUP] Sidebar mount", Math.round(performance.now()) + "ms projectRoot=" + projectRoot);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Array<{ file: string; line: number; text: string }>>([]);
   const [fileTree, setFileTree] = useState<FileNode | null>(null);
@@ -79,27 +78,22 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
   const [gitBranch, setGitBranch] = useState("main");
   const [gitLoading, setGitLoading] = useState(false);
 
-  // Load file tree when explorer view becomes active (deferred to avoid blocking initial render)
+  // SAFE MODE STEP 1: restore file tree loading
   useEffect(() => {
     if (view !== "explorer") return;
-    if (fileTree) return; // already loaded
+    if (fileTree) return;
 
     let cancelled = false;
     setTreeLoading(true);
     setTreeError(null);
 
-    // Defer loading by 100ms to let the initial UI render first
     const timer = setTimeout(() => {
       if (cancelled) return;
-      console.log("[STARTUP] Sidebar buildFileTree start", performance.now().toFixed(0) + "ms");
       const rootName = projectRoot.split(/[/\\]/).pop() || projectRoot;
       buildFileTree(projectRoot, rootName, 2)
         .then((tree) => {
           if (!cancelled) {
-            console.log("[STARTUP] Sidebar buildFileTree done", performance.now().toFixed(0) + "ms", "directories loaded");
             setFileTree(tree);
-            // Defer flattening to avoid blocking
-            requestIdleCallback(() => onFileTreeLoaded?.(flattenFiles(tree)), { timeout: 2000 });
             setTreeLoading(false);
           }
         })
@@ -112,7 +106,7 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
     }, 100);
 
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [view, projectRoot]);
+  }, [view, projectRoot, fileTree]);
 
   // Reload file tree
   const refreshTree = useCallback(() => {

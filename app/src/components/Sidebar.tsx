@@ -2,7 +2,7 @@ import { FileTree, FileNode } from "@oceanix/file-tree";
 import { EditorTab } from "./EditorTabs";
 import GitPanel, { GitFileStatus } from "./GitPanel";
 import { useState, useCallback, useEffect } from "react";
-import { readDir, readFile, gitStatus, gitBranchName, gitCommit, gitStage, gitUnstage, searchInFiles } from "../services/api";
+import { readDir, readFile, gitStatus, gitBranchName, gitCommit, gitStage, gitUnstage, gitBranches, gitSwitchBranch, searchInFiles } from "../services/api";
 
 interface SidebarProps {
   view: string;
@@ -76,6 +76,7 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
   // Git state
   const [gitFiles, setGitFiles] = useState<GitFileStatus[]>([]);
   const [gitBranch, setGitBranch] = useState("main");
+  const [gitBranchesList, setGitBranchesList] = useState<Array<{ name: string; isHead: boolean }>>([]);
   const [gitLoading, setGitLoading] = useState(false);
 
   // SAFE MODE STEP 1: restore file tree loading
@@ -113,8 +114,16 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
     setFileTree(null);
   }, []);
 
-  // Load git data when git view becomes active
+  // Auto-refresh git on file changes
   useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    import("@tauri-apps/api/event").then(({ listen }) => {
+      listen("file-changed", () => {
+        handleGitRefresh();
+      }).then((fn) => { unlisten = fn; });
+    });
+    return () => { unlisten?.(); };
+  }, [handleGitRefresh]);
     if (view !== "git") return;
 
     let cancelled = false;
@@ -123,13 +132,15 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
     Promise.all([
       gitStatus().catch(() => [] as GitFileStatus[]),
       gitBranchName().catch(() => "main"),
-    ]).then(([files, branch]) => {
+      gitBranches().catch(() => [] as Array<{ name: string; isHead: boolean }>),
+    ]).then(([files, branch, brList]) => {
       if (!cancelled) {
         setGitFiles(files.map((f: { path: string; status: string }) => ({
           path: f.path,
           status: f.status as GitFileStatus["status"],
         })));
         setGitBranch(branch);
+        setGitBranchesList(brList);
         setGitLoading(false);
       }
     });
@@ -140,15 +151,17 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
   const handleGitCommit = useCallback(async (message: string) => {
     try {
       await gitCommit(message);
-      const [files, branch] = await Promise.all([
+      const [files, branch, brList] = await Promise.all([
         gitStatus().catch(() => [] as GitFileStatus[]),
         gitBranchName().catch(() => "main"),
+        gitBranches().catch(() => [] as Array<{ name: string; isHead: boolean }>),
       ]);
       setGitFiles(files.map((f: { path: string; status: string }) => ({
         path: f.path,
         status: f.status as GitFileStatus["status"],
       })));
       setGitBranch(branch);
+      setGitBranchesList(brList);
     } catch (err) {
       console.error("Commit failed:", err);
     }
@@ -157,15 +170,17 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
   const handleGitRefresh = useCallback(async () => {
     try {
       setGitLoading(true);
-      const [files, branch] = await Promise.all([
+      const [files, branch, brList] = await Promise.all([
         gitStatus().catch(() => [] as GitFileStatus[]),
         gitBranchName().catch(() => "main"),
+        gitBranches().catch(() => [] as Array<{ name: string; isHead: boolean }>),
       ]);
       setGitFiles(files.map((f: { path: string; status: string }) => ({
         path: f.path,
         status: f.status as GitFileStatus["status"],
       })));
       setGitBranch(branch);
+      setGitBranchesList(brList);
     } finally {
       setGitLoading(false);
     }
@@ -306,8 +321,13 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
           <GitPanel
             files={gitFiles}
             branch={gitBranch}
+            branches={gitBranchesList}
             onCommit={handleGitCommit}
             onRefresh={handleGitRefresh}
+            onSwitchBranch={async (name) => {
+              await gitSwitchBranch(name).catch(() => {});
+              handleGitRefresh();
+            }}
             onStageFile={async (path) => {
               const file = gitFiles.find((f) => f.path === path);
               if (file?.status === "added") {
@@ -323,6 +343,11 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
       {view === "ai" && (
         <div style={{ padding: 12, color: "var(--text-secondary)" }}>
           AI Chat — select the AI view
+        </div>
+      )}
+      {view === "rag" && (
+        <div style={{ padding: 12, color: "var(--text-secondary)" }}>
+          RAG — Retrieval-Augmented Generation
         </div>
       )}
     </div>

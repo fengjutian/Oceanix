@@ -1,4 +1,4 @@
-import { FolderOpen, Search, GitBranch, Bot } from "lucide-react";
+import { FolderOpen, Search, GitBranch, Bot, Database } from "lucide-react";
 
 interface ActivityBarProps {
   activeView: string;
@@ -11,6 +11,7 @@ export default function ActivityBar({ activeView, onViewChange }: ActivityBarPro
     search: { icon: <Search size={20} />, label: "Search" },
     git: { icon: <GitBranch size={20} />, label: "Git" },
     ai: { icon: <Bot size={20} />, label: "AI" },
+    rag: { icon: <Database size={20} />, label: "RAG" },
   };
 
   return (

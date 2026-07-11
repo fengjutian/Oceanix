@@ -114,6 +114,30 @@ pub fn run() {
             commands::plugin_contributions,
             commands::get_cwd,
         ])
+        .setup(|app| {
+            let handle = app.handle().clone();
+            // Set up file watcher that emits events when files change in the project
+            if let Ok(cwd) = std::env::current_dir() {
+                let (tx, rx) = std::sync::mpsc::channel();
+                let mut watcher = notify_debouncer_mini::new_debouncer(
+                    std::time::Duration::from_secs(1),
+                    None,
+                    move |events| {
+                        let _ = tx.send(events);
+                    },
+                ).ok();
+                if let Some(ref mut w) = watcher {
+                    let _ = w.watcher().watch(&cwd, notify::RecursiveMode::Recursive);
+                    let app_handle = handle.clone();
+                    std::thread::spawn(move || {
+                        for _events in rx {
+                            let _ = app_handle.emit("file-changed", ());
+                        }
+                    });
+                }
+            }
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running Oceanix");
 }

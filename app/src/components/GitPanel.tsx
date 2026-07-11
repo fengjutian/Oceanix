@@ -8,9 +8,11 @@ export interface GitFileStatus {
 interface GitPanelProps {
   files: GitFileStatus[];
   branch: string;
+  branches?: Array<{ name: string; isHead: boolean }>;
   onStageFile?: (path: string) => void;
   onCommit?: (message: string) => void;
   onRefresh?: () => void;
+  onSwitchBranch?: (name: string) => void;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -27,7 +29,7 @@ const STATUS_LABELS: Record<string, string> = {
   untracked: "U",
 };
 
-export default function GitPanel({ files, branch, onStageFile, onCommit, onRefresh }: GitPanelProps) {
+export default function GitPanel({ files, branch, branches, onStageFile, onCommit, onRefresh, onSwitchBranch }: GitPanelProps) {
   const [message, setMessage] = useState("");
 
   const staged = files.filter((f) => f.status === "added");
@@ -40,7 +42,27 @@ export default function GitPanel({ files, branch, onStageFile, onCommit, onRefre
         <span style={{ fontSize: 13, textTransform: "uppercase", color: "var(--text-secondary)" }}>
           Source Control
         </span>
-        <span style={{ fontSize: 12, color: "var(--accent)" }}>⎇ {branch}</span>
+        <span style={{ fontSize: 12, color: "var(--accent)" }}>
+          {branches && branches.length > 0 ? (
+            <select
+              value={branch}
+              onChange={(e) => onSwitchBranch?.(e.target.value)}
+              style={{
+                background: "var(--bg-tertiary)", color: "var(--accent)",
+                border: "1px solid var(--border-color)", borderRadius: 4,
+                padding: "2px 4px", fontSize: 12, cursor: "pointer", outline: "none",
+              }}
+            >
+              {branches.map((b) => (
+                <option key={b.name} value={b.name}>
+                  ⎇ {b.name}{b.isHead ? " (current)" : ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <>⎇ {branch}</>
+          )}
+        </span>
       </div>
 
       {/* Commit input */}

@@ -30,3 +30,5 @@ oceanix-git = { path = "../crates/oceanix-git" }
 oceanix-search = { path = "../crates/oceanix-search" }
 oceanix-ai = { path = "../crates/oceanix-ai" }
 oceanix-plugin = { path = "../crates/oceanix-plugin" }
+notify = "7"
+notify-debouncer-mini = "0.6"

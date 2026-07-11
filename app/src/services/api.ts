@@ -121,6 +121,22 @@ export async function gitUnstage(path: string): Promise<void> {
   return invoke("git_unstage", { path });
 }
 
+export async function gitPush(branch: string): Promise<void> {
+  return invoke("git_push", { branch });
+}
+
+export async function gitPull(branch: string): Promise<void> {
+  return invoke("git_pull", { branch });
+}
+
+export async function gitCreateBranch(name: string): Promise<void> {
+  return invoke("git_create_branch", { name });
+}
+
+export async function gitSwitchBranch(name: string): Promise<void> {
+  return invoke("git_switch_branch", { name });
+}
+
 // ─── LSP ─────────────────────────────────────────────
 
 export async function lspStart(languageId: string, rootPath: string): Promise<string> {

@@ -3,9 +3,31 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./styles/global.css";
 
-// Configure Monaco Editor to load from local node_modules instead of CDN
+// Configure Monaco Editor web workers for Vite local loading
 import { loader } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
+import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
+import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
+import cssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
+import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
+
+// Tell Monaco how to create web workers (must use window, not self, for Tauri WebView2)
+(window as any).MonacoEnvironment = {
+  getWorker(_: string, label: string) {
+    if (label === "typescript" || label === "javascript") return new tsWorker();
+    if (label === "json") return new jsonWorker();
+    if (label === "css" || label === "scss" || label === "less") return new cssWorker();
+    if (label === "html" || label === "handlebars" || label === "razor") return new htmlWorker();
+    return new editorWorker();
+  },
+};
+
+// Register additional languages that Monaco doesn't load by default
+import "monaco-editor/esm/vs/basic-languages/rust/rust.contribution";
+import "monaco-editor/esm/vs/basic-languages/python/python.contribution";
+import "monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution";
+
 loader.config({ monaco });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

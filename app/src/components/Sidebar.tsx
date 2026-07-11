@@ -2,7 +2,7 @@ import { FileTree, FileNode } from "@oceanix/file-tree";
 import { EditorTab } from "./EditorTabs";
 import GitPanel, { GitFileStatus } from "./GitPanel";
 import { useState, useCallback, useEffect } from "react";
-import { readDir, gitStatus, gitBranchName, gitCommit, gitStage, gitUnstage, searchInFiles } from "../services/api";
+import { readDir, readFile, gitStatus, gitBranchName, gitCommit, gitStage, gitUnstage, searchInFiles } from "../services/api";
 
 interface SidebarProps {
   view: string;
@@ -186,7 +186,7 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
     }
   }, [searchQuery]);
 
-  const handleOpenFile = (path: string) => {
+  const handleOpenFile = async (path: string) => {
     if (onOpenFile) {
       const label = path.split("/").pop() || path;
       const ext = label.split(".").pop() || "";
@@ -195,10 +195,19 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
         json: "json", md: "markdown", css: "css", html: "html",
         toml: "toml", py: "python",
       };
+
+      // Load file content
+      let content = "";
+      try {
+        content = await readFile(path);
+      } catch {
+        content = `// Could not read: ${path}`;
+      }
+
       onOpenFile({
         id: path, path, label,
         language: langMap[ext] || "plaintext",
-        content: "",
+        content,
         dirty: false,
       });
     }

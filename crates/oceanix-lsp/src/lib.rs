@@ -90,6 +90,20 @@ pub struct CompletionList {
     pub items: Vec<CompletionItem>,
 }
 
+/// Flat text edit for rename results.
+#[derive(Debug, Clone, Serialize)]
+pub struct TextEdit {
+    pub uri: String,
+    pub range: Range,
+    pub new_text: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct RawTextEdit {
+    range: Range,
+    new_text: String,
+}
+
 /// Flat diagnostic for crossing FFI / Tauri boundary.
 #[derive(Debug, Clone, Serialize)]
 pub struct FlatDiagnostic {
@@ -257,7 +271,6 @@ impl LspClient {
             if result.is_null() {
                 return Ok(vec![]);
             }
-            // Result can be a single Location or Vec<Location>
             if let Ok(loc) = serde_json::from_value::<Location>(result.clone()) {
                 Ok(vec![loc])
             } else if let Ok(locs) = serde_json::from_value::<Vec<Location>>(result) {
@@ -267,6 +280,52 @@ impl LspClient {
             }
         } else {
             Ok(vec![])
+        }
+    }
+
+    /// Request rename at a position, returns workspace edits.
+    pub fn rename(
+        &mut self,
+        uri: &str,
+        line: u32,
+        character: u32,
+        new_name: &str,
+    ) -> Result<Option<Vec<TextEdit>>, String> {
+        let params = serde_json::json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character },
+            "newName": new_name,
+        });
+        let resp = self.send_request("textDocument/rename", params)?;
+        if let Some(result) = resp.result {
+            if result.is_null() {
+                return Ok(None);
+            }
+            // Parse WorkspaceEdit → extract text edits
+            if let Some(changes) = result.get("changes") {
+                let edits: Vec<TextEdit> = changes
+                    .as_object()
+                    .map(|obj| {
+                        obj.iter().flat_map(|(uri_str, edits_val)| {
+                            let uri = uri_str.clone();
+                            serde_json::from_value::<Vec<RawTextEdit>>(edits_val.clone())
+                                .unwrap_or_default()
+                                .into_iter()
+                                .map(move |e| TextEdit {
+                                    uri: uri.clone(),
+                                    range: e.range,
+                                    new_text: e.new_text,
+                                })
+                                .collect::<Vec<_>>()
+                        }).collect()
+                    })
+                    .unwrap_or_default();
+                Ok(Some(edits))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
         }
     }
 

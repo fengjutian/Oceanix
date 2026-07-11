@@ -113,6 +113,14 @@ export async function gitBranches(): Promise<Array<{ name: string; isHead: boole
   return invoke("git_branches");
 }
 
+export async function gitStage(path: string): Promise<void> {
+  return invoke("git_stage", { path });
+}
+
+export async function gitUnstage(path: string): Promise<void> {
+  return invoke("git_unstage", { path });
+}
+
 // ─── LSP ─────────────────────────────────────────────
 
 export async function lspStart(languageId: string, rootPath: string): Promise<string> {
@@ -152,6 +160,19 @@ export async function lspDiagnostics(languageId: string): Promise<Array<{
   source: string;
 }>> {
   return invoke("lsp_diagnostics", { languageId });
+}
+
+export async function lspRename(
+  languageId: string, path: string, line: number, character: number, newName: string
+): Promise<Array<{
+  uri: string;
+  rangeStartLine: number;
+  rangeStartChar: number;
+  rangeEndLine: number;
+  rangeEndChar: number;
+  newText: string;
+}>> {
+  return invoke("lsp_rename", { languageId, path, line, character, newName });
 }
 
 // ─── Plugins ─────────────────────────────────────────

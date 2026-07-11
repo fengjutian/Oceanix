@@ -27,7 +27,7 @@ const STATUS_LABELS: Record<string, string> = {
   untracked: "U",
 };
 
-export default function GitPanel({ files, branch, onCommit, onRefresh }: GitPanelProps) {
+export default function GitPanel({ files, branch, onStageFile, onCommit, onRefresh }: GitPanelProps) {
   const [message, setMessage] = useState("");
 
   const staged = files.filter((f) => f.status === "added");
@@ -105,7 +105,7 @@ export default function GitPanel({ files, branch, onCommit, onRefresh }: GitPane
             Staged ({staged.length})
           </div>
           {staged.map((f) => (
-            <FileRow key={f.path} file={f} />
+            <FileRow key={f.path} file={f} onStage={onStageFile} />
           ))}
         </div>
       )}
@@ -143,7 +143,7 @@ export default function GitPanel({ files, branch, onCommit, onRefresh }: GitPane
   );
 }
 
-function FileRow({ file }: { file: GitFileStatus }) {
+function FileRow({ file, onStage }: { file: GitFileStatus; onStage?: (path: string) => void }) {
   return (
     <div
       style={{
@@ -161,7 +161,20 @@ function FileRow({ file }: { file: GitFileStatus }) {
       <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
         {file.path.split("/").pop()}
       </span>
-      <span style={{ fontSize: 11, color: "var(--text-secondary)", marginLeft: "auto" }}>
+      {onStage && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onStage(file.path); }}
+          title={file.status === "untracked" || file.status === "modified" ? "Stage" : "Unstage"}
+          style={{
+            marginLeft: "auto", padding: "0 6px", fontSize: 11,
+            background: "var(--bg-tertiary)", color: "var(--text-secondary)",
+            border: "1px solid var(--border-color)", borderRadius: 3, cursor: "pointer",
+          }}
+        >
+          {file.status === "untracked" || file.status === "modified" ? "+" : "−"}
+        </button>
+      )}
+      <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>
         {file.path}
       </span>
     </div>

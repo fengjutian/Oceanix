@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from "react";
 import Editor, { OnMount, DiffEditor } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
-import { aiComplete, lspHover, lspDefinition, lspStart, lspDidOpen, lspDidChange } from "../services/api";
+import { aiComplete, lspHover, lspDefinition, lspStart, lspDidOpen, lspDidChange, lspRename } from "../services/api";
 
 const LSP_LANGUAGES = new Set(["rust", "python", "typescript", "typescriptreact", "javascript"]);
 
@@ -93,9 +93,39 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
         },
       });
 
+      // Register LSP rename provider
+      const renameDisposable = monaco.languages.registerRenameProvider("*", {
+        provideRenameEdits: async (model, position, newName) => {
+          const tab = tabs.find((t) => t.id === activeTabId);
+          if (!tab || !isLspLanguage(tab.language)) return null;
+          try {
+            const edits = await lspRename(tab.language, tab.path, position.lineNumber - 1, position.column - 1, newName);
+            if (edits.length > 0) {
+              return {
+                edits: edits.map((e) => ({
+                  resource: monaco.Uri.parse(e.uri),
+                  versionId: undefined,
+                  textEdit: {
+                    range: new monaco.Range(
+                      e.rangeStartLine + 1, e.rangeStartChar + 1,
+                      e.rangeEndLine + 1, e.rangeEndChar + 1,
+                    ),
+                    text: e.newText,
+                  },
+                })),
+              };
+            }
+          } catch { /* LSP not available */ }
+          return null;
+        },
+        resolveRenameLocation: async (model, position) => {
+          return { range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column + 1), text: "" };
+        },
+      });
+
       // Store disposables for cleanup and re-registration
       lspDisposablesRef.current.forEach((d) => d.dispose());
-      lspDisposablesRef.current = [hoverDisposable, defDisposable];
+      lspDisposablesRef.current = [hoverDisposable, defDisposable, renameDisposable];
     },
     [editorRef, tabs, activeTabId]
   );

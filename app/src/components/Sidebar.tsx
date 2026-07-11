@@ -88,7 +88,7 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
     setTreeError(null);
 
     const rootName = projectRoot.split(/[/\\]/).pop() || projectRoot;
-    buildFileTree(projectRoot, rootName, 4)
+    buildFileTree(projectRoot, rootName, 2)
       .then((tree) => {
         if (!cancelled) {
           setFileTree(tree);
@@ -295,6 +295,16 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
             branch={gitBranch}
             onCommit={handleGitCommit}
             onRefresh={handleGitRefresh}
+            onStageFile={async (path) => {
+              const { gitStage, gitUnstage } = await import("../services/api");
+              const file = gitFiles.find((f) => f.path === path);
+              if (file?.status === "added") {
+                await gitUnstage(path).catch(() => {});
+              } else {
+                await gitStage(path).catch(() => {});
+              }
+              handleGitRefresh();
+            }}
           />
         )
       )}

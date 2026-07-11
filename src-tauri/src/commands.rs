@@ -335,6 +335,18 @@ pub fn git_branches(state: tauri::State<'_, crate::GitState>) -> Result<Vec<GitB
 }
 
 #[tauri::command]
+pub fn git_stage(path: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let repo = repo_from_state(&state)?;
+    repo.stage(&path)
+}
+
+#[tauri::command]
+pub fn git_unstage(path: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let repo = repo_from_state(&state)?;
+    repo.unstage(&path)
+}
+
+#[tauri::command]
 pub fn get_cwd() -> Result<String, String> {
     std::env::current_dir()
         .map(|p| p.to_string_lossy().to_string())
@@ -459,6 +471,32 @@ pub fn lsp_diagnostics(language_id: String, state: tauri::State<'_, crate::LspSt
         message: d.message,
         source: d.source,
     }).collect())
+}
+
+#[tauri::command]
+pub fn lsp_rename(language_id: String, path: String, line: u32, character: u32, new_name: String, state: tauri::State<'_, crate::LspState>) -> Result<Vec<LspLocationEdit>, String> {
+    let mut guard = state.clients.lock().map_err(|e| format!("lock: {e}"))?;
+    let client = guard.get_mut(&language_id).ok_or("LSP not started")?;
+    let uri = uri_from_path(&path);
+    let edits = client.rename(&uri, line, character, &new_name)?;
+    Ok(edits.unwrap_or_default().into_iter().map(|e| LspLocationEdit {
+        uri: e.uri,
+        range_start_line: e.range.start.line,
+        range_start_char: e.range.start.character,
+        range_end_line: e.range.end.line,
+        range_end_char: e.range.end.character,
+        new_text: e.new_text,
+    }).collect())
+}
+
+#[derive(serde::Serialize)]
+pub struct LspLocationEdit {
+    uri: String,
+    range_start_line: u32,
+    range_start_char: u32,
+    range_end_line: u32,
+    range_end_char: u32,
+    new_text: String,
 }
 
 // ─── Plugin Registry ────────────────────────────────

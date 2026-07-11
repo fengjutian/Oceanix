@@ -10,6 +10,7 @@ pub struct AiState {
     pub bridge: Mutex<oceanix_ai::AiBridge>,
 }
 
+
 // ─── Greet (smoke test) ─────────────────────────────
 
 #[tauri::command]
@@ -304,6 +305,7 @@ fn repo_from_state(state: &tauri::State<'_, crate::GitState>) -> Result<GitRepo,
 pub fn git_status(state: tauri::State<'_, crate::GitState>) -> Result<Vec<GitStatusEntry>, String> {
     let repo = repo_from_state(&state)?;
     let files = repo.status()?;
+    tracing::info!("git_status: {} files", files.len());
     Ok(files
         .into_iter()
         .map(|f| GitStatusEntry {

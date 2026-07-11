@@ -122,12 +122,35 @@ def completion(
         end = min(len(lines), cursor_line + 5)
         context = "\n".join(lines[start:end])
 
-        prompt = (
-            f"You are a code completion engine. Given the following {language} code context, "
-            f"predict the next tokens the user is likely to type at the cursor position (line {cursor_line}).\n"
-            f"Return ONLY the completion text, no explanation, no markdown formatting.\n\n"
-            f"```{language}\n{context}\n```\n\nCompletion:"
-        )
+        # RAG: search for related code in the project
+        rag_context = ""
+        try:
+            from .rag import search_codebase as _search
+            # Search using the current line as query
+            current_line_text = lines[cursor_line - 1].strip() if cursor_line <= len(lines) else ""
+            query = current_line_text[:80] if current_line_text else context[:100]
+            rag_results = _search(f"{language} {query}", top_k=3)
+            if rag_results:
+                rag_parts = []
+                for r in rag_results[:3]:
+                    rag_parts.append(f"// {r['file']}:{r['start_line']}\n{r['content'][:200]}")
+                rag_context = "// Related code from project:\n" + "\n---\n".join(rag_parts)
+        except Exception:
+            pass
+
+        prompt_parts = [
+            f"You are a code completion engine. Complete the {language} code at the cursor.",
+        ]
+        if rag_context:
+            prompt_parts.append(rag_context)
+        prompt_parts.extend([
+            f"```{language}",
+            context,
+            "```",
+            "",
+            "Completion:",
+        ])
+        prompt = "\n".join(prompt_parts)
 
         response = provider.invoke(prompt)
         text = response.content if hasattr(response, "content") else str(response)
@@ -185,6 +208,48 @@ def chat(
         return f"Error: {e}"
 
 
+# ── RAG tools ───────────────────────────────────────────
+
+@mcp.tool()
+def search_codebase(query: str, top_k: int = 10) -> list[dict]:
+    """Search the project codebase using the RAG index.
+
+    Args:
+        query: Search query — can be natural language or code snippets.
+        top_k: Number of results to return (default 10).
+
+    Returns:
+        List of matching code chunks with file, line numbers, content, and relevance score.
+    """
+    from .rag import search_codebase as _search
+
+    results = _search(query, top_k=top_k)
+    if not results:
+        return [{"message": "No results found. Try rebuilding the index with rebuild_rag_index."}]
+    return results
+
+
+@mcp.tool()
+def rebuild_rag_index() -> dict:
+    """Rebuild the RAG code index from scratch.
+
+    Use this after major code changes or if search results seem stale.
+    """
+    from .rag import rebuild_index as _rebuild
+
+    _rebuild()
+    from .rag import get_index
+    idx = get_index()
+    return idx.stats()
+
+
+@mcp.tool()
+def rag_stats() -> dict:
+    """Get RAG index statistics."""
+    from .rag import get_index
+    return get_index().stats()
+
+
 # ── LLM Provider ───────────────────────────────────────
 
 _llm = None
@@ -192,7 +257,9 @@ _llm_checked = False
 
 
 def _get_llm():
-    """Lazy-init the LLM provider chain."""
+    """Lazy-init the LLM provider chain.
+    
+    Public so http_api.py can reuse the same provider."""
     global _llm, _llm_checked
     if _llm is not None:
         return _llm
@@ -207,6 +274,7 @@ def _get_llm():
             _llm = ChatAnthropic(
                 model=os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
                 max_tokens=4096,
+                streaming=True,
             )
             logger.info("Using Anthropic Claude")
             return _llm
@@ -219,6 +287,7 @@ def _get_llm():
             _llm = ChatOpenAI(
                 model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
                 max_tokens=4096,
+                streaming=True,
             )
             logger.info("Using OpenAI")
             return _llm
@@ -243,9 +312,39 @@ def _get_llm():
 # ── Entry point ────────────────────────────────────────
 
 def main():
-    """Run the MCP server on stdio."""
+    """Run the MCP server on stdio, with HTTP API on a background thread."""
+    import threading
+
     logger.info("Oceanix AI Server starting on stdio...")
+
+    # Start FastAPI HTTP server on a daemon thread
+    http_port = int(os.environ.get("OCEANIX_AI_HTTP_PORT", "11435"))
+    http_thread = threading.Thread(
+        target=_run_http_server,
+        args=(http_port,),
+        daemon=True,
+        name="ai-http-api",
+    )
+    http_thread.start()
+    logger.info(f"HTTP API will listen on http://127.0.0.1:{http_port}")
+
+    # Initialize RAG on startup
+    try:
+        from .rag import init_rag
+        init_rag()
+    except Exception as e:
+        logger.warning(f"RAG init skipped: {e}")
+
     mcp.run(transport="stdio")
+
+
+def _run_http_server(port: int):
+    """Run the FastAPI HTTP server (runs in daemon thread)."""
+    try:
+        from .http_api import run_http
+        run_http(port)
+    except Exception as e:
+        logger.error(f"HTTP server failed: {e}")
 
 
 if __name__ == "__main__":

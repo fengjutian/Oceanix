@@ -1,5 +1,6 @@
 mod commands;
 
+use tauri::Emitter;
 use commands::AiState;
 use std::sync::Mutex;
 use std::sync::Arc;
@@ -115,26 +116,24 @@ pub fn run() {
             commands::get_cwd,
         ])
         .setup(|app| {
-            let handle = app.handle().clone();
-            // Set up file watcher that emits events when files change in the project
+            // File system watcher — emits 'file-changed' event when project files change
+            use notify::Watcher;
             if let Ok(cwd) = std::env::current_dir() {
+                let handle = app.handle().clone();
                 let (tx, rx) = std::sync::mpsc::channel();
-                let mut watcher = notify_debouncer_mini::new_debouncer(
-                    std::time::Duration::from_secs(1),
-                    None,
-                    move |events| {
-                        let _ = tx.send(events);
-                    },
-                ).ok();
+                let mut watcher = notify::recommended_watcher(move |res| {
+                    if let Ok(_event) = res {
+                        let _ = tx.send(());
+                    }
+                }).ok();
                 if let Some(ref mut w) = watcher {
-                    let _ = w.watcher().watch(&cwd, notify::RecursiveMode::Recursive);
-                    let app_handle = handle.clone();
-                    std::thread::spawn(move || {
-                        for _events in rx {
-                            let _ = app_handle.emit("file-changed", ());
-                        }
-                    });
+                    let _ = w.watch(&cwd, notify::RecursiveMode::Recursive);
                 }
+                std::thread::spawn(move || {
+                    for () in rx {
+                        let _ = handle.emit("file-changed", ());
+                    }
+                });
             }
             Ok(())
         })

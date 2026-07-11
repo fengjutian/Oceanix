@@ -1,6 +1,7 @@
 import { FileTree, FileNode } from "@oceanix/file-tree";
 import { EditorTab } from "./EditorTabs";
 import GitPanel, { GitFileStatus } from "./GitPanel";
+import ChatPanel from "./ChatPanel";
 import { useState, useCallback, useEffect } from "react";
 import { readDir, readFile, gitStatus, gitBranchName, gitCommit, gitStage, gitUnstage, gitBranches, gitSwitchBranch, searchInFiles } from "../services/api";
 
@@ -78,6 +79,7 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
   const [gitBranch, setGitBranch] = useState("main");
   const [gitBranchesList, setGitBranchesList] = useState<Array<{ name: string; isHead: boolean }>>([]);
   const [gitLoading, setGitLoading] = useState(false);
+  const [gitError, setGitError] = useState<string | null>(null);
 
   // SAFE MODE STEP 1: restore file tree loading
   useEffect(() => {
@@ -114,27 +116,16 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
     setFileTree(null);
   }, []);
 
-  // Auto-refresh git on file changes
+  // Load git data once on mount (regardless of active view)
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    import("@tauri-apps/api/event").then(({ listen }) => {
-      listen("file-changed", () => {
-        handleGitRefresh();
-      }).then((fn) => { unlisten = fn; });
-    });
-    return () => { unlisten?.(); };
-  }, [handleGitRefresh]);
-    if (view !== "git") return;
-
-    let cancelled = false;
-    setGitLoading(true);
-
-    Promise.all([
-      gitStatus().catch(() => [] as GitFileStatus[]),
-      gitBranchName().catch(() => "main"),
-      gitBranches().catch(() => [] as Array<{ name: string; isHead: boolean }>),
-    ]).then(([files, branch, brList]) => {
-      if (!cancelled) {
+    const loadGit = () => {
+      setGitLoading(true);
+      setGitError(null);
+      Promise.all([
+        gitStatus().catch((e: string) => { setGitError(String(e)); return [] as GitFileStatus[]; }),
+        gitBranchName().catch(() => "main"),
+        gitBranches().catch(() => [] as Array<{ name: string; isHead: boolean }>),
+      ]).then(([files, branch, brList]) => {
         setGitFiles(files.map((f: { path: string; status: string }) => ({
           path: f.path,
           status: f.status as GitFileStatus["status"],
@@ -142,11 +133,10 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
         setGitBranch(branch);
         setGitBranchesList(brList);
         setGitLoading(false);
-      }
-    });
-
-    return () => { cancelled = true; };
-  }, [view]);
+      });
+    };
+    loadGit();
+  }, []); // mount once
 
   const handleGitCommit = useCallback(async (message: string) => {
     try {
@@ -185,6 +175,17 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
       setGitLoading(false);
     }
   }, []);
+
+  // Auto-refresh git on file changes
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    import("@tauri-apps/api/event").then(({ listen }) => {
+      listen("file-changed", () => {
+        handleGitRefresh();
+      }).then((fn) => { unlisten = fn; });
+    });
+    return () => { unlisten?.(); };
+  }, [handleGitRefresh]);
 
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) { setSearchResults([]); return; }
@@ -317,6 +318,12 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
       {view === "git" && (
         gitLoading ? (
           <div style={{ padding: 12, color: "var(--text-secondary)", fontSize: 13 }}>Loading git status...</div>
+        ) : gitError ? (
+          <div style={{ padding: 12, color: "#f44747", fontSize: 13 }}>
+            Git error: {gitError}
+            <br />
+            <button onClick={handleGitRefresh} style={{ marginTop: 4, cursor: "pointer" }}>Retry</button>
+          </div>
         ) : (
           <GitPanel
             files={gitFiles}
@@ -340,11 +347,7 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
           />
         )
       )}
-      {view === "ai" && (
-        <div style={{ padding: 12, color: "var(--text-secondary)" }}>
-          AI Chat — select the AI view
-        </div>
-      )}
+      {view === "ai" && <ChatPanel />}
       {view === "rag" && (
         <div style={{ padding: 12, color: "var(--text-secondary)" }}>
           RAG — Retrieval-Augmented Generation

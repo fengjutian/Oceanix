@@ -226,12 +226,16 @@ fn detect_shell() -> String {
 
 #[cfg(windows)]
 fn detect_shell() -> String {
-    for candidate in &["pwsh.exe", "powershell.exe", "cmd.exe"] {
+    // Prefer PowerShell if available, fall back to cmd.exe (always present).
+    // On Windows, `where pwsh.exe` may match PowerShell Core; `where powershell.exe`
+    // matches Windows PowerShell 5.1 which is always installed.
+    for candidate in &["powershell.exe", "pwsh.exe"] {
         if which_exists(candidate) {
             debug!(candidate, "shell detected");
             return candidate.to_string();
         }
     }
+    // cmd.exe is guaranteed to exist on every Windows system
     "cmd.exe".to_string()
 }
 

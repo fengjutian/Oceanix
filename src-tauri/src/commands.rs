@@ -386,11 +386,42 @@ pub struct LspDiagnostic {
 /// Map of language_id → server command + args
 fn lsp_server_config(lang: &str) -> Option<(&'static str, &'static [&'static str])> {
     match lang {
-        "rust" => Some(("rust-analyzer", &[] as &[&str])),
+        "rust" => {
+            // Try rust-analyzer (standalone) first, then rustup proxy
+            if which_exists("rust-analyzer") {
+                Some(("rust-analyzer", &[] as &[&str]))
+            } else {
+                // Fallback: rustup has a proxy if the component is installed
+                tracing::warn!("rust-analyzer not found in PATH. Install with: rustup component add rust-analyzer");
+                None
+            }
+        }
         "python" => Some(("pyright-langserver", &["--stdio"] as &[&str])),
         "typescript" | "typescriptreact" | "javascript" => Some(("typescript-language-server", &["--stdio"] as &[&str])),
         _ => None,
     }
+}
+
+#[cfg(not(windows))]
+fn which_exists(cmd: &str) -> bool {
+    std::process::Command::new("which")
+        .arg(cmd)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn which_exists(cmd: &str) -> bool {
+    std::process::Command::new("where")
+        .arg(cmd)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 fn uri_from_path(path: &str) -> String {

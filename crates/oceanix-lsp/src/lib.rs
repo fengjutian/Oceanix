@@ -8,7 +8,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 // ─── JSON-RPC wire types ─────────────────────────────
 
@@ -451,6 +451,8 @@ impl LspClient {
 
     fn process_incoming(&self) -> Result<(), String> {
         // Placeholder — notifications handled inline in read_response
+        #[allow(unused_variables)]
+        let _reader = &self.reader;
         Ok(())
     }
 

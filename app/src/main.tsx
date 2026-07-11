@@ -27,6 +27,11 @@ import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import "monaco-editor/esm/vs/basic-languages/rust/rust.contribution";
 import "monaco-editor/esm/vs/basic-languages/python/python.contribution";
 import "monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution";
+import "monaco-editor/esm/vs/basic-languages/java/java.contribution";
+import "monaco-editor/esm/vs/basic-languages/go/go.contribution";
+import "monaco-editor/esm/vs/basic-languages/sql/sql.contribution";
+import "monaco-editor/esm/vs/basic-languages/scss/scss.contribution";
+import "monaco-editor/esm/vs/basic-languages/less/less.contribution";
 
 loader.config({ monaco });
 

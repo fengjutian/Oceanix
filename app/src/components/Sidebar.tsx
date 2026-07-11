@@ -191,9 +191,12 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
       const label = path.split("/").pop() || path;
       const ext = label.split(".").pop() || "";
       const langMap: Record<string, string> = {
-        ts: "typescript", tsx: "typescript", rs: "rust",
-        json: "json", md: "markdown", css: "css", html: "html",
-        toml: "toml", py: "python",
+        ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
+        rs: "rust", json: "json", md: "markdown", css: "css", html: "html",
+        py: "python", java: "java", go: "go",
+        sql: "sql", scss: "scss", less: "less",
+        vue: "html", // Vue SFC rendered as HTML
+        // toml, yaml, xml, sh, etc. → fallback to plaintext below
       };
 
       // Load file content

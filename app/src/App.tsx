@@ -16,6 +16,7 @@ import { useLocale } from "./i18n/LocaleContext";
 import { KeybindingRegistry, KeyBinding } from "@oceanix/keybinding";
 import { applyTheme, DARK_THEME, LIGHT_THEME } from "@oceanix/theme";
 import { loadSession, saveSession, SessionState, getProjectRoot, writeFile } from "./services/api";
+import { registerCommand as registerGlobalCommand } from "./services/commandBus";
 
 const DEFAULT_BINDINGS: KeyBinding[] = [
   { key: "Ctrl+Shift+P", command: "palette.show", label: "Show Command Palette" },
@@ -279,6 +280,15 @@ function App() {
         registry.registerCommand(binding.command, () => handler(binding.command));
       }
     }
+
+    // Also register on the global command bus so components like
+    // WelcomePage can trigger commands without fake KeyboardEvents
+    // (which are unreliable in Tauri WebView2).
+    registerGlobalCommand("file.new", () => handler("file.new"));
+    registerGlobalCommand("file.openFolder", () => handler("file.openFolder"));
+    registerGlobalCommand("panel.toggle", () => handler("panel.toggle"));
+    registerGlobalCommand("palette.show", () => handler("palette.show"));
+    registerGlobalCommand("theme.toggle", () => handler("theme.toggle"));
 
     registry.attach();
     return () => registry.detach();

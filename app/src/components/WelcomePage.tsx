@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { FilePlus, FolderOpen, History, Settings, FileText, Copy, Terminal } from "lucide-react";
 import { getRecentProjects } from "../services/api";
 import { useLocale } from "../i18n/LocaleContext";
+import { executeCommand } from "../services/commandBus";
 
 /**
  * WelcomePage — VS Code-style welcome / get started page.
@@ -68,42 +69,25 @@ export default function WelcomePage() {
             icon={<FilePlus size={18} />}
             label="New File"
             shortcut="Ctrl+N"
-            onClick={() => {
-              // Dispatch keyboard event for new file (handled by keybinding)
-              document.dispatchEvent(
-                new KeyboardEvent("keydown", { ctrlKey: true, key: "n" })
-              );
-            }}
+            onClick={() => executeCommand("file.new")}
           />
           <ActionCard
             icon={<FolderOpen size={18} />}
             label="Open Folder"
             shortcut="Ctrl+O"
-            onClick={() => {
-              document.dispatchEvent(
-                new KeyboardEvent("keydown", { ctrlKey: true, key: "o" })
-              );
-            }}
+            onClick={() => executeCommand("file.openFolder")}
           />
           <ActionCard
             icon={<Settings size={18} />}
             label="Settings"
             shortcut="Ctrl+,"
-            onClick={() => {
-              document.dispatchEvent(
-                new KeyboardEvent("keydown", { ctrlKey: true, key: "," })
-              );
-            }}
+            onClick={() => executeCommand("palette.show")}
           />
           <ActionCard
             icon={<Terminal size={18} />}
             label="Toggle Panel"
             shortcut="Ctrl+J"
-            onClick={() => {
-              document.dispatchEvent(
-                new KeyboardEvent("keydown", { ctrlKey: true, key: "j" })
-              );
-            }}
+            onClick={() => executeCommand("panel.toggle")}
           />
         </div>
 

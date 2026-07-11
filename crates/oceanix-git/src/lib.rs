@@ -230,25 +230,20 @@ impl GitRepo {
 
     /// Unstage a file (git reset HEAD -- <path>).
     #[instrument(skip(self))]
+    /// Unstage a file (git reset HEAD -- <path>).
+    #[instrument(skip(self))]
     pub fn unstage(&self, path: &str) -> Result<(), String> {
         let head = self
             .inner
             .head()
             .map_err(|e| format!("failed to get HEAD: {e}"))?;
         let head_obj = head
-            .peel(git2::ObjectType::Tree)
+            .peel(git2::ObjectType::Commit)
             .map_err(|e| format!("failed to peel HEAD: {e}"))?;
-        let mut index = self
-            .inner
-            .index()
-            .map_err(|e| format!("failed to get index: {e}"))?;
-        index
-            .remove_path(std::path::Path::new(path))
+        // git reset HEAD -- <path>
+        self.inner
+            .reset_default(Some(&head_obj), &[path])
             .map_err(|e| format!("failed to unstage {path}: {e}"))?;
-        // Reset to HEAD version
-        index
-            .write()
-            .map_err(|e| format!("failed to write index: {e}"))?;
         debug!(path, "unstaged");
         Ok(())
     }

@@ -194,7 +194,10 @@ impl PluginRegistry {
     }
 
     pub fn get_manifest(&self, name: &str) -> Option<&PluginManifest> {
-        None // Real impl would store manifests separately
+        // Store manifests separately when implemented.
+        // For now only active plugins are accessible via contributions().
+        tracing::warn!(name, "get_manifest not yet implemented — contribution-based queries available via contributions()");
+        None
     }
 
     // ─── internal ─────────────────────────────────────

@@ -159,7 +159,7 @@ def _get_llm():
         except Exception as e:
             logger.warning(f"OpenAI init failed: {e}")
 
-    if os.environ.get("OLLAMA_HOST") or True:
+    if os.environ.get("OLLAMA_HOST"):
         try:
             from langchain_ollama import ChatOllama
             _llm = ChatOllama(

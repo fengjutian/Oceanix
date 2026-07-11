@@ -2,7 +2,7 @@ import { FileTree, FileNode } from "@oceanix/file-tree";
 import { EditorTab } from "./EditorTabs";
 import GitPanel, { GitFileStatus } from "./GitPanel";
 import { useState, useCallback, useEffect } from "react";
-import { readDir, gitStatus, gitBranchName, gitCommit } from "../services/api";
+import { readDir, gitStatus, gitBranchName, gitCommit, gitStage, gitUnstage, searchInFiles } from "../services/api";
 
 interface SidebarProps {
   view: string;
@@ -172,7 +172,6 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) { setSearchResults([]); return; }
     try {
-      const { searchInFiles } = await import("../services/api");
       const results = await searchInFiles({
         query: searchQuery,
         path: ".",
@@ -296,7 +295,6 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
             onCommit={handleGitCommit}
             onRefresh={handleGitRefresh}
             onStageFile={async (path) => {
-              const { gitStage, gitUnstage } = await import("../services/api");
               const file = gitFiles.find((f) => f.path === path);
               if (file?.status === "added") {
                 await gitUnstage(path).catch(() => {});

@@ -57,7 +57,8 @@ impl AiBridge {
 
     /// Start the Python sidecar process
     pub fn start(&mut self) -> Result<(), String> {
-        let mut child = ["oceanix-ai", "python", "python3"]
+        // "oceanix-ai" is a placeholder for a future bundled binary; skip for now.
+        let mut child = ["python", "python3"]
             .iter()
             .find_map(|bin| {
                 Command::new(bin)
@@ -69,7 +70,7 @@ impl AiBridge {
                     .spawn()
                     .ok()
             })
-            .ok_or_else(|| "Failed to start AI sidecar: no suitable binary found (tried oceanix-ai, python, python3)".to_string())?;
+            .ok_or_else(|| "Failed to start AI sidecar: python/python3 not found".to_string())?;
 
         // Take stdout from the child and spawn a persistent reader thread.
         // This decouples reading from request timing so we can use recv_timeout.

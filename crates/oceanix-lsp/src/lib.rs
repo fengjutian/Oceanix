@@ -368,12 +368,13 @@ impl LspClient {
         // Read responses until we match the id
         loop {
             let resp = self.read_response()?;
-            // It could be a notification instead of a response
+            // Skip notifications (no id) — keep reading
+            if resp.id.is_none() {
+                continue;
+            }
             if resp.id == Some(id) {
                 return Ok(resp);
             }
-            // It's a notification — process it
-            self.process_notification_value(resp.result.as_ref(), resp.error.as_ref());
         }
     }
 
@@ -423,19 +424,56 @@ impl LspClient {
             .map_err(|e| format!("read body ({content_len} bytes): {e}"))?;
 
         let text = String::from_utf8_lossy(&body);
-        serde_json::from_str(&text).map_err(|e| {
-            error!(?text, "JSON parse error");
-            format!("parse response: {e}")
-        })
+
+        // Parse as generic JSON first to detect notifications (no `id`)
+        let value: serde_json::Value =
+            serde_json::from_str(&text).map_err(|e| {
+                error!(?text, "JSON parse error");
+                format!("parse response: {e}")
+            })?;
+
+        // Notifications have a `method` field and no `id`
+        if value.get("id").is_none() {
+            if let Some(method) = value.get("method").and_then(|m| m.as_str()) {
+                self.handle_notification(method, value.get("params"));
+            }
+            // Return a dummy response to keep the request loop going
+            return Ok(JsonRpcResponse {
+                jsonrpc: None,
+                id: None,
+                result: None,
+                error: None,
+            });
+        }
+
+        serde_json::from_value(value).map_err(|e| format!("parse response: {e}"))
     }
 
     fn process_incoming(&self) -> Result<(), String> {
-        // This is a placeholder — we handle incoming in read_response loop
+        // Placeholder — notifications handled inline in read_response
         Ok(())
     }
 
-    fn process_notification_value(&self, _result: Option<&Value>, _error: Option<&Value>) {
-        // Handled inline during request-response cycle
+    fn handle_notification(&self, method: &str, params: Option<&serde_json::Value>) {
+        match method {
+            "textDocument/publishDiagnostics" => {
+                if let Some(params) = params {
+                    if let Some(uri) = params.get("uri").and_then(|u| u.as_str()) {
+                        if let Some(diags) = params.get("diagnostics").and_then(|d| d.as_array()) {
+                            let mut collected = self.diagnostics.lock().unwrap_or_else(|e| e.into_inner());
+                            for diag in diags {
+                                if let Ok(d) = serde_json::from_value::<Diagnostic>(diag.clone()) {
+                                    collected.push(FlatDiagnostic::from_lsp(uri, &d));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {
+                debug!(method, "unhandled LSP notification");
+            }
+        }
     }
 }
 

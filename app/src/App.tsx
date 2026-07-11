@@ -17,6 +17,7 @@ import { KeybindingRegistry, KeyBinding } from "@oceanix/keybinding";
 import { applyTheme, DARK_THEME, LIGHT_THEME } from "@oceanix/theme";
 import { loadSession, saveSession, SessionState, getProjectRoot, writeFile } from "./services/api";
 import { registerCommand as registerGlobalCommand } from "./services/commandBus";
+import { GlassDialog } from "@oceanix/glass";
 
 const DEFAULT_BINDINGS: KeyBinding[] = [
   { key: "Ctrl+Shift+P", command: "palette.show", label: "Show Command Palette" },
@@ -533,19 +534,13 @@ function App() {
       )}
 
       {showSettings && (
-        <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-          background: "rgba(0,0,0,0.5)", zIndex: 1000,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
+        <GlassDialog open={showSettings} onClose={() => setShowSettings(false)} dialogClassName={undefined}>
           <div style={{
-            background: "var(--bg-primary)", border: "1px solid var(--border-color)",
-            borderRadius: 8, width: 480, maxHeight: "80vh", overflow: "auto",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+            width: 480, maxHeight: "80vh", overflow: "auto",
           }}>
             <SettingsPanel onClose={() => setShowSettings(false)} />
           </div>
-        </div>
+        </GlassDialog>
       )}
     </div>
   );

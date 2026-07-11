@@ -146,6 +146,27 @@ pub fn run() {
                     }
                 });
             }
+            // Enable dark title bar on Windows 10/11
+            #[cfg(target_os = "windows")]
+            {
+                use windows::Win32::Graphics::Dwm::{
+                    DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE,
+                };
+                if let Some(window) = app.get_webview_window("main") {
+                    if let Ok(hwnd) = window.hwnd() {
+                        let use_dark = 1u32; // TRUE
+                        unsafe {
+                            let _ = DwmSetWindowAttribute(
+                                hwnd,
+                                DWMWA_USE_IMMERSIVE_DARK_MODE,
+                                &use_dark as *const _ as *const _,
+                                std::mem::size_of::<u32>() as u32,
+                            );
+                        }
+                    }
+                }
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())

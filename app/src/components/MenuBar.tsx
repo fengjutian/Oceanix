@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { GlassPanel } from "@oceanix/glass";
 
 // ── Menu data ──────────────────────────────────────────
 
@@ -64,7 +65,10 @@ export default function MenuBar({ menus }: MenuBarProps) {
             {menu.label}
           </div>
           {openMenu === menu.label && (
-            <div className="menu-bar-dropdown">
+            <GlassPanel
+              size="sm"
+              className="menu-bar-dropdown"
+            >
               {menu.items.map((item, i) =>
                 item.separator ? (
                   <div key={i} className="menu-bar-separator" />
@@ -84,7 +88,7 @@ export default function MenuBar({ menus }: MenuBarProps) {
                   </div>
                 )
               )}
-            </div>
+            </GlassPanel>
           )}
         </div>
       ))}

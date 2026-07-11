@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocale } from "../i18n/LocaleContext";
+import { GlassCard, GlassInput, GlassBtn } from "@oceanix/glass";
 
 const AI_SERVER_URL = "http://127.0.0.1:11435";
 
@@ -181,20 +182,12 @@ export default function ChatPanel() {
           </div>
         )}
         {messages.map((msg) => (
-          <div
+          <GlassCard
             key={msg.id}
             style={{
               marginBottom: 12,
               padding: "8px 10px",
               borderRadius: 6,
-              background:
-                msg.role === "user"
-                  ? "var(--bg-tertiary)"
-                  : "var(--bg-secondary)",
-              border:
-                msg.role === "assistant"
-                  ? "1px solid var(--border-color)"
-                  : "none",
             }}
           >
             <div
@@ -225,7 +218,7 @@ export default function ChatPanel() {
                 <span style={{ color: "var(--text-secondary)" }}>▊</span>
               )}
             </div>
-          </div>
+          </GlassCard>
         ))}
         {error && (
           <div
@@ -250,16 +243,9 @@ export default function ChatPanel() {
           gap: 6,
         }}
       >
-        <input
+        <GlassInput
           style={{
             flex: 1,
-            padding: "6px 8px",
-            background: "var(--bg-tertiary)",
-            border: "1px solid var(--border-color)",
-            color: "var(--text-primary)",
-            fontSize: 13,
-            borderRadius: 4,
-            outline: "none",
           }}
           placeholder={streaming ? t("chat.streaming") : t("chat.placeholder")}
           value={input}
@@ -267,23 +253,14 @@ export default function ChatPanel() {
           onKeyDown={handleKeyDown}
           disabled={streaming}
         />
-        <button
+        <GlassBtn
+          accent
           type="submit"
           disabled={streaming || !input.trim()}
-          style={{
-            padding: "6px 12px",
-            background: streaming
-              ? "var(--bg-tertiary)"
-              : "var(--accent)",
-            color: streaming ? "var(--text-secondary)" : "#fff",
-            border: "none",
-            borderRadius: 4,
-            fontSize: 13,
-            cursor: streaming ? "not-allowed" : "pointer",
-          }}
+          style={{ opacity: streaming || !input.trim() ? 0.5 : 1 }}
         >
           {t("chat.send")}
-        </button>
+        </GlassBtn>
       </form>
     </div>
   );

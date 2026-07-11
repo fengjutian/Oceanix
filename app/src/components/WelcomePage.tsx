@@ -3,6 +3,7 @@ import { FilePlus, FolderOpen, History, Settings, FileText, Copy, Terminal } fro
 import { getRecentProjects } from "../services/api";
 import { useLocale } from "../i18n/LocaleContext";
 import { executeCommand } from "../services/commandBus";
+import { GlassPanel, GlassCard, GlassBtn } from "@oceanix/glass";
 
 /**
  * WelcomePage — VS Code-style welcome / get started page.
@@ -30,7 +31,8 @@ export default function WelcomePage() {
         background: "var(--bg-primary)",
       }}
     >
-      <div
+      <GlassPanel
+        size="lg"
         style={{
           maxWidth: 680,
           width: "100%",
@@ -107,10 +109,9 @@ export default function WelcomePage() {
             >
               Recent
             </div>
-            <div
+            <GlassCard
               style={{
-                border: "1px solid var(--border-color)",
-                borderRadius: 6,
+                padding: 0,
                 overflow: "hidden",
               }}
             >
@@ -124,7 +125,7 @@ export default function WelcomePage() {
                   t={t as unknown as (key: string) => string}
                 />
               ))}
-            </div>
+            </GlassCard>
           </div>
         )}
 
@@ -154,7 +155,7 @@ export default function WelcomePage() {
             shortcut="Ctrl+K Ctrl+T"
           />
         </div>
-      </div>
+      </GlassPanel>
     </div>
   );
 }
@@ -173,26 +174,15 @@ function ActionCard({
   onClick: () => void;
 }) {
   return (
-    <div
+    <GlassCard
+      interactive
       onClick={onClick}
+      className={undefined}
       style={{
         display: "flex",
         alignItems: "center",
         gap: 10,
         padding: "10px 14px",
-        background: "var(--bg-secondary)",
-        border: "1px solid var(--border-color)",
-        borderRadius: 6,
-        cursor: "pointer",
-        transition: "background 0.1s",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background =
-          "var(--bg-tertiary)";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background =
-          "var(--bg-secondary)";
       }}
     >
       <span style={{ color: "var(--text-secondary)", display: "flex" }}>
@@ -208,19 +198,18 @@ function ActionCard({
       >
         {label}
       </span>
-      <span
+      <GlassBtn
+        disabled
         style={{
           fontSize: 11,
-          color: "var(--text-secondary)",
-          background: "var(--bg-tertiary)",
           padding: "2px 6px",
           borderRadius: 3,
-          fontFamily: "monospace",
+          cursor: "default",
         }}
       >
         {shortcut}
-      </span>
-    </div>
+      </GlassBtn>
+    </GlassCard>
   );
 }
 
@@ -244,18 +233,18 @@ function RecentItem({
         display: "flex",
         alignItems: "center",
         padding: "8px 12px",
-        background: "var(--bg-secondary)",
-        borderBottom: isLast ? "none" : "1px solid var(--border-color)",
         cursor: "pointer",
         fontSize: 13,
+        borderBottom: isLast ? "none" : "1px solid var(--glass-border)",
+        transition: "background 0.15s",
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLDivElement).style.background =
-          "var(--bg-tertiary)";
+          "var(--glass-bg-hover)";
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLDivElement).style.background =
-          "var(--bg-secondary)";
+          "transparent";
       }}
     >
       <FolderOpen

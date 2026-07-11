@@ -4,24 +4,10 @@ import { filterCommands } from "./fuzzy";
 
 const STYLES: Record<string, React.CSSProperties> = {
   overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.4)",
     zIndex: 9999,
-    display: "flex",
-    justifyContent: "center",
     paddingTop: "15vh",
   },
-  container: {
-    width: 560,
-    maxHeight: 400,
-    background: "var(--bg-secondary, #252526)",
-    borderRadius: 8,
-    boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-    overflow: "hidden",
-    display: "flex",
-    flexDirection: "column",
-  },
+  container: {},
   input: {
     width: "100%",
     padding: "12px 16px",
@@ -155,8 +141,14 @@ export function CommandPalette({
   }, [selectedIndex]);
 
   return (
-    <div style={STYLES.overlay} onClick={onClose}>
-      <div style={STYLES.container} onClick={(e) => e.stopPropagation()}>
+    <div className="glass-overlay" style={STYLES.overlay} onClick={onClose}>
+      <div className="glass-panel" style={{
+        width: 560,
+        maxHeight: 400,
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+      }} onClick={(e) => e.stopPropagation()}>
         <input
           ref={inputRef}
           style={STYLES.input}

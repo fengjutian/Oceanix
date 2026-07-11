@@ -31,3 +31,6 @@ oceanix-search = { path = "../crates/oceanix-search" }
 oceanix-ai = { path = "../crates/oceanix-ai" }
 oceanix-plugin = { path = "../crates/oceanix-plugin" }
 notify = "7"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = ["Win32_Graphics_Dwm"] }

@@ -18,6 +18,7 @@
     "packages/keybinding",
     "packages/theme",
     "packages/ai-chat",
-    "packages/agent-workspace"
+    "packages/agent-workspace",
+    "packages/glass"
   ]
 }

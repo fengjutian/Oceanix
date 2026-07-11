@@ -1,0 +1,190 @@
+/* ══════════════════════════════════════════════════════════════
+   Glass (Glassmorphism) — CSS utilities
+   @oceanix/glass — zero-dependency glassmorphism primitives
+   ══════════════════════════════════════════════════════════════ */
+
+/* ─── CSS Variables ────────────────────────────── */
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-bg-hover: rgba(255, 255, 255, 0.08);
+  --glass-bg-active: rgba(255, 255, 255, 0.12);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-hover: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --glass-blur: 16px;
+  --glass-radius: 12px;
+  --glass-radius-sm: 8px;
+  --glass-radius-lg: 16px;
+}
+
+/* ─── Shared glass surface ─────────────────────── */
+.glass-surface,
+.glass-panel,
+.glass-panel-sm,
+.glass-panel-lg,
+.glass-card,
+.glass-dialog {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  border: 1px solid var(--glass-border);
+}
+
+/* ─── Glass Panel ──────────────────────────────── */
+.glass-panel {
+  border-radius: var(--glass-radius);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-panel-sm {
+  border-radius: var(--glass-radius-sm);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-panel-lg {
+  border-radius: var(--glass-radius-lg);
+  box-shadow: var(--glass-shadow);
+}
+
+/* ─── Glass Card ───────────────────────────────── */
+.glass-card {
+  border-radius: var(--glass-radius);
+  padding: 16px;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s;
+}
+
+.glass-card:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--glass-border-hover);
+}
+
+.glass-card.interactive {
+  cursor: pointer;
+}
+
+.glass-card.interactive:active {
+  background: var(--glass-bg-active);
+  transform: scale(0.985);
+}
+
+/* ─── Glass Button ─────────────────────────────── */
+.glass-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.1s;
+  user-select: none;
+}
+
+.glass-btn:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--glass-border-hover);
+}
+
+.glass-btn:active {
+  background: var(--glass-bg-active);
+  transform: scale(0.97);
+}
+
+.glass-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.glass-btn-accent {
+  background: rgba(0, 122, 204, 0.2);
+  border-color: rgba(0, 122, 204, 0.35);
+}
+
+.glass-btn-accent:hover {
+  background: rgba(0, 122, 204, 0.3);
+  border-color: rgba(0, 122, 204, 0.5);
+}
+
+/* ─── Glass Input ──────────────────────────────── */
+.glass-input {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 6px 10px;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.glass-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.glass-input:focus {
+  border-color: var(--accent);
+  background: var(--glass-bg-hover);
+}
+
+/* ─── Glass Modal (overlay + dialog) ───────────── */
+.glass-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.glass-dialog {
+  border-radius: var(--glass-radius-lg);
+  box-shadow: var(--glass-shadow);
+  padding: 24px;
+  min-width: 320px;
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+/* ─── Glass Tooltip ────────────────────────────── */
+.glass-tooltip {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(200%);
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 4px 8px;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* ─── Glass Divider ────────────────────────────── */
+.glass-divider {
+  height: 1px;
+  background: var(--glass-border);
+  border: none;
+  margin: 0;
+}
+
+/* ─── Subtle glass (less blur, more transparent) ── */
+.glass-subtle {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(8px) saturate(160%);
+  -webkit-backdrop-filter: blur(8px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}

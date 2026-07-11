@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from "react";
 import Editor, { OnMount, DiffEditor } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
+import WelcomePage from "./WelcomePage";
 import { aiComplete, lspHover, lspDefinition, lspStart, lspDidOpen, lspDidChange, lspRename } from "../services/api";
 
 const LSP_LANGUAGES = new Set(["rust", "python", "typescript", "typescriptreact", "javascript"]);
@@ -265,12 +266,7 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
               }}
             />
           ) : (
-            <div className="editor-empty">
-              <div className="empty-state">
-                <h1>Oceanix</h1>
-                <p>Ctrl+O to open a file or folder</p>
-              </div>
-            </div>
+            <WelcomePage />
           )}
         </div>
 

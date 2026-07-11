@@ -4,6 +4,7 @@ import GitPanel, { GitFileStatus } from "./GitPanel";
 import ChatPanel from "./ChatPanel";
 import { useState, useCallback, useEffect } from "react";
 import { readDir, readFile, gitStatus, gitBranchName, gitCommit, gitStage, gitUnstage, gitBranches, gitSwitchBranch, searchInFiles } from "../services/api";
+import { useLocale } from "../i18n/LocaleContext";
 
 interface SidebarProps {
   view: string;
@@ -68,6 +69,7 @@ async function buildFileTree(dirPath: string, dirName: string, depth: number): P
 }
 
 export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoaded }: SidebarProps) {
+  const { t } = useLocale();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Array<{ file: string; line: number; text: string }>>([]);
   const [fileTree, setFileTree] = useState<FileNode | null>(null);
@@ -317,7 +319,7 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
       )}
       {view === "git" && (
         gitLoading ? (
-          <div style={{ padding: 12, color: "var(--text-secondary)", fontSize: 13 }}>Loading git status...</div>
+          <div style={{ padding: 12, color: "var(--text-secondary)", fontSize: 13 }}>{t("sidebar.loading")}</div>
         ) : gitError ? (
           <div style={{ padding: 12, color: "#f44747", fontSize: 13 }}>
             Git error: {gitError}

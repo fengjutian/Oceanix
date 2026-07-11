@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useLocale } from "../i18n/LocaleContext";
 
 const AI_SERVER_URL = "http://127.0.0.1:11435";
 
@@ -18,6 +19,7 @@ function nextId(): string {
  * Connects to Oceanix AI HTTP server /chat/stream endpoint.
  */
 export default function ChatPanel() {
+  const { t } = useLocale();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -151,9 +153,9 @@ export default function ChatPanel() {
           borderBottom: "1px solid var(--border-color)",
         }}
       >
-        <span>AI Chat</span>
+        <span>{t("sidebar.aiChat")}</span>
         {streaming && (
-          <span style={{ fontSize: 10, color: "var(--accent)" }}>● streaming</span>
+          <span style={{ fontSize: 10, color: "var(--accent)" }}>● {t("sidebar.aiStreaming")}</span>
         )}
       </div>
 
@@ -175,7 +177,7 @@ export default function ChatPanel() {
               textAlign: "center",
             }}
           >
-            Ask anything about your code. Start a conversation below.
+            {t("chat.empty")}
           </div>
         )}
         {messages.map((msg) => (
@@ -207,7 +209,7 @@ export default function ChatPanel() {
                 marginBottom: 4,
               }}
             >
-              {msg.role === "user" ? "You" : "AI"}
+              {msg.role === "user" ? t("chat.you") : t("chat.ai")}
             </div>
             <div
               style={{
@@ -233,7 +235,7 @@ export default function ChatPanel() {
               fontSize: 12,
             }}
           >
-            Error: {error}
+            {t("chat.error")} {error}
           </div>
         )}
       </div>
@@ -259,7 +261,7 @@ export default function ChatPanel() {
             borderRadius: 4,
             outline: "none",
           }}
-          placeholder={streaming ? "AI is thinking..." : "Ask AI... (Enter to send, Shift+Enter for newline)"}
+          placeholder={streaming ? t("chat.streaming") : t("chat.placeholder")}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -280,7 +282,7 @@ export default function ChatPanel() {
             cursor: streaming ? "not-allowed" : "pointer",
           }}
         >
-          Send
+          {t("chat.send")}
         </button>
       </form>
     </div>

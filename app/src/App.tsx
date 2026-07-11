@@ -11,6 +11,8 @@ import OutputPanel from "./components/OutputPanel";
 import SettingsPanel from "./components/SettingsPanel";
 import type { editor } from "monaco-editor";
 import { CommandPalette, Command, filterCommands } from "@oceanix/command-palette";
+import MenuBar, { buildMenus, MenuActions } from "./components/MenuBar";
+import { useLocale } from "./i18n/LocaleContext";
 import { KeybindingRegistry, KeyBinding } from "@oceanix/keybinding";
 import { applyTheme, DARK_THEME, LIGHT_THEME } from "@oceanix/theme";
 import { loadSession, saveSession, SessionState, getProjectRoot, writeFile } from "./services/api";
@@ -32,6 +34,7 @@ const DEFAULT_BINDINGS: KeyBinding[] = [
 ];
 
 function App() {
+  const { t, locale, setLocale } = useLocale();
   const [sidebarView, setSidebarView] = useState("explorer");
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(true);
@@ -328,10 +331,91 @@ function App() {
   // ─── Active file info ───────────────────────────────
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
+  const menuActions = useMemo<MenuActions>(() => ({
+    onNewFile: () => {
+      const id = `untitled-${Date.now()}`;
+      openTab({ id, path: id, label: "Untitled", language: "plaintext", content: "", dirty: false });
+    },
+    onOpenFile: () => setShowPalette(true),
+    onOpenFolder: () => setShowPalette(true),
+    onSave: () => {
+      if (!activeTabId) return;
+      const tab = tabs.find((t) => t.id === activeTabId);
+      if (tab && tab.path && !tab.path.startsWith("untitled-")) {
+        writeFile(tab.path, tab.content).catch(() => {});
+        saveTab(activeTabId);
+      }
+    },
+    onCloseEditor: () => activeTabId && closeTab(activeTabId),
+    onUndo: () => editorRef.current?.trigger("keyboard", "undo", null),
+    onRedo: () => editorRef.current?.trigger("keyboard", "redo", null),
+    onCut: () => editorRef.current?.trigger("keyboard", "editor.action.clipboardCutAction", null),
+    onCopy: () => editorRef.current?.trigger("keyboard", "editor.action.clipboardCopyAction", null),
+    onPaste: () => editorRef.current?.trigger("keyboard", "editor.action.clipboardPasteAction", null),
+    onFind: () => editorRef.current?.trigger("keyboard", "actions.find", null),
+    onReplace: () => editorRef.current?.trigger("keyboard", "editor.action.startFindReplaceAction", null),
+    onFindInFiles: () => setSidebarView("search"),
+    onSelectAll: () => editorRef.current?.trigger("keyboard", "editor.action.selectAll", null),
+    onExpandSelection: () => editorRef.current?.trigger("keyboard", "editor.action.smartSelect.expand", null),
+    onCopyLineUp: () => editorRef.current?.trigger("keyboard", "editor.action.copyLinesUpAction", null),
+    onCopyLineDown: () => editorRef.current?.trigger("keyboard", "editor.action.copyLinesDownAction", null),
+    onMoveLineUp: () => editorRef.current?.trigger("keyboard", "editor.action.moveLinesUpAction", null),
+    onMoveLineDown: () => editorRef.current?.trigger("keyboard", "editor.action.moveLinesDownAction", null),
+    onAddCursorAbove: () => editorRef.current?.trigger("keyboard", "editor.action.insertCursorAbove", null),
+    onAddCursorBelow: () => editorRef.current?.trigger("keyboard", "editor.action.insertCursorBelow", null),
+    onSelectAllOccurrences: () => editorRef.current?.trigger("keyboard", "editor.action.selectHighlights", null),
+    onQuickOpen: () => setShowPalette(true),
+    onGoToLine: () => editorRef.current?.trigger("keyboard", "editor.action.gotoLine", null),
+    onGoToSymbol: () => editorRef.current?.trigger("keyboard", "editor.action.gotoNextSymbolFromResult", null),
+    onGoBack: () => editorRef.current?.trigger("keyboard", "editor.action.goBack", null),
+    onGoForward: () => editorRef.current?.trigger("keyboard", "editor.action.goForward", null),
+    onGoToDefinition: () => editorRef.current?.trigger("keyboard", "editor.action.revealDefinition", null),
+    onGoToReferences: () => editorRef.current?.trigger("keyboard", "editor.action.goToReferences", null),
+    onZoomIn: () => editorRef.current?.trigger("keyboard", "editor.action.fontZoomIn", null),
+    onZoomOut: () => editorRef.current?.trigger("keyboard", "editor.action.fontZoomOut", null),
+    onToggleFullScreen: () => {
+      // Tauri fullscreen — use document fullscreen as fallback
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        document.documentElement.requestFullscreen();
+      }
+    },
+    onNewTerminal: () => { setPanelVisible(true); setPanelTab("terminal"); },
+    onKillTerminal: () => setPanelVisible(false),
+    onCommandPalette: () => setShowPalette(true),
+    onToggleSidebar: () => setSidebarVisible((v) => !v),
+    onTogglePanel: () => setPanelVisible((v) => !v),
+    onToggleTheme: () => setTheme((t) => (t === "dark" ? "light" : "dark")),
+    onSplitRight: () => {
+      if (splitVisible && splitDirection === "horizontal") setSplitVisible(false);
+      else { setSplitVisible(true); setSplitDirection("horizontal"); }
+    },
+    onSplitDown: () => {
+      if (splitVisible && splitDirection === "vertical") setSplitVisible(false);
+      else { setSplitVisible(true); setSplitDirection("vertical"); }
+    },
+    onSettings: () => setShowSettings(true),
+  }), [activeTabId, tabs, openTab, closeTab, saveTab, splitVisible, splitDirection]);
+
+  const menus = useMemo(() => {
+    const base = buildMenus(menuActions, t as unknown as (key: string) => string);
+    // Add language toggle to View menu
+    const viewMenu = base.find((m) => m.label === t("menu.view"));
+    if (viewMenu) {
+      viewMenu.items.push(
+        { separator: true },
+        { label: locale === "zh" ? "Switch to English" : "切换到中文", action: () => setLocale(locale === "zh" ? "en" : "zh") }
+      );
+    }
+    return base;
+  }, [menuActions, t, locale, setLocale]);
+
   return (
     <div className="app-container">
+      <MenuBar menus={menus} />
       <div className="app-main">
-        <ActivityBar activeView={sidebarView} onViewChange={(v) => { setSidebarView(v); setSidebarVisible(true); }} />
+        <ActivityBar activeView={sidebarView} onViewChange={(v) => { setSidebarView(v); setSidebarVisible(true); }} onOpenSettings={() => setShowSettings(true)} />
         <PanelGroup direction="horizontal">
           {sidebarVisible && (
             <>
@@ -391,16 +475,22 @@ function App() {
                   <Panel defaultSize={25} minSize={10} maxSize={50}>
                     <div className="panel-container">
                       <div className="panel-tabs">
-                        {(["terminal", "problems", "output"] as const).map((tab) => (
+                        {(["terminal", "problems", "output"] as const).map((tab) => {
+                          const labels: Record<string, string> = {
+                            terminal: t("panel.terminal"),
+                            problems: t("panel.problems"),
+                            output: t("panel.output"),
+                          };
+                          return (
                           <span
                             key={tab}
                             className={`panel-tab ${panelTab === tab ? "active" : ""}`}
                             onClick={() => setPanelTab(tab)}
                             style={{ cursor: "pointer" }}
                           >
-                            {tab.toUpperCase()}
+                            {labels[tab]}
                           </span>
-                        ))}
+                        )})}
                       </div>
                       <div className="panel-content">
                         {panelTab === "terminal" && <Terminal id="main" />}

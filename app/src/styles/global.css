@@ -67,15 +67,109 @@ body {
   overflow: hidden;
 }
 
-/* Activity Bar */
+/* ─── Menu Bar ─────────────────────────────────── */
+
+.menu-bar {
+  height: 30px;
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--border-color);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.menu-bar-item-wrapper {
+  position: relative;
+  -webkit-app-region: no-drag;
+}
+
+.menu-bar-label {
+  padding: 2px 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  line-height: 22px;
+}
+
+.menu-bar-label:hover,
+.menu-bar-label.active {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.menu-bar-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 220px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 500;
+  padding: 4px 0;
+  -webkit-app-region: no-drag;
+}
+
+.menu-bar-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.menu-bar-item:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.menu-bar-shortcut {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-left: 32px;
+  font-family: monospace;
+}
+
+.menu-bar-item:hover .menu-bar-shortcut {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.menu-bar-separator {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 8px;
+}
+
+/* ─── Activity Bar ─────────────────────────────── */
+
 .activity-bar {
   width: var(--activity-bar-width);
   background: var(--bg-secondary);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 8px;
+  justify-content: space-between;
   border-right: 1px solid var(--border-color);
+}
+
+.activity-bar-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 8px;
+}
+
+.activity-bar-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 8px;
 }
 
 .activity-btn {

@@ -46,7 +46,18 @@ pub fn run() {
         project_root: Mutex::new(
             std::env::current_dir()
                 .ok()
-                .map(|p| p.to_string_lossy().to_string())
+                .map(|p| {
+                    // Tauri runs in src-tauri/, search upward for the git repo root
+                    let mut path = p;
+                    while !path.join(".git").exists() {
+                        if let Some(parent) = path.parent() {
+                            path = parent.to_path_buf();
+                        } else {
+                            break;
+                        }
+                    }
+                    path.to_string_lossy().to_string()
+                })
         ),
     };
 

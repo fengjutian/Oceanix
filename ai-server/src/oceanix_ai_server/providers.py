@@ -1,4 +1,4 @@
-"""LLM Provider adapter layer."""
+""LLM Provider adapter layer — kept for future use. Currently server.py._get_llm() handles provider init."""
 
 PROVIDERS = {
     "openai": "OpenAI GPT-4 / o-series",
@@ -7,5 +7,5 @@ PROVIDERS = {
 }
 
 def get_provider(name: str):
-    """Get a provider by name. Placeholder for Phase 1."""
+    """Get provider metadata by name."""
     return PROVIDERS.get(name)

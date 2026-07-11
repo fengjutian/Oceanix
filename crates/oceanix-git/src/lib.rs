@@ -248,6 +248,86 @@ impl GitRepo {
         Ok(())
     }
 
+    /// Push to a remote.
+    #[instrument(skip(self))]
+    pub fn push(&self, remote: &str, branch: &str) -> Result<(), String> {
+        let mut remote = self
+            .inner
+            .find_remote(remote)
+            .map_err(|e| format!("remote '{remote}' not found: {e}"))?;
+        let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
+        let mut opts = git2::PushOptions::new();
+        remote
+            .push(&[&refspec], Some(&mut opts))
+            .map_err(|e| format!("push failed: {e}"))?;
+        debug!(branch, remote = "origin", "pushed");
+        Ok(())
+    }
+
+    /// Pull from a remote (fetch + merge).
+    #[instrument(skip(self))]
+    pub fn pull(&self, remote: &str, branch: &str) -> Result<(), String> {
+        let mut remote = self
+            .inner
+            .find_remote(remote)
+            .map_err(|e| format!("remote '{remote}' not found: {e}"))?;
+        let refspec = format!("refs/heads/{branch}:refs/heads/{branch}");
+        let mut fetch_opts = git2::FetchOptions::new();
+        remote
+            .fetch(&[&branch], Some(&mut fetch_opts), None)
+            .map_err(|e| format!("fetch failed: {e}"))?;
+
+        let fetch_head = self
+            .inner
+            .find_reference("FETCH_HEAD")
+            .map_err(|e| format!("FETCH_HEAD not found: {e}"))?;
+        let fetch_commit = self
+            .inner
+            .reference_to_annotated_commit(&fetch_head)
+            .map_err(|e| format!("annotate fetch: {e}"))?;
+        self.inner
+            .merge(&[&fetch_commit], None, None)
+            .map_err(|e| format!("merge failed: {e}"))?;
+
+        debug!(branch, "pulled");
+        Ok(())
+    }
+
+    /// Create a new branch from HEAD.
+    #[instrument(skip(self))]
+    pub fn create_branch(&self, name: &str) -> Result<(), String> {
+        let head = self
+            .inner
+            .head()
+            .map_err(|e| format!("failed to get HEAD: {e}"))?;
+        let head_commit = head
+            .peel_to_commit()
+            .map_err(|e| format!("peel HEAD: {e}"))?;
+        self.inner
+            .branch(name, &head_commit, false)
+            .map_err(|e| format!("create branch: {e}"))?;
+        debug!(name, "branch created");
+        Ok(())
+    }
+
+    /// Switch to a different branch.
+    #[instrument(skip(self))]
+    pub fn switch_branch(&self, name: &str) -> Result<(), String> {
+        let branch_ref = format!("refs/heads/{name}");
+        let obj = self
+            .inner
+            .revparse_single(&branch_ref)
+            .map_err(|e| format!("branch '{name}' not found: {e}"))?;
+        self.inner
+            .checkout_tree(&obj, None)
+            .map_err(|e| format!("checkout: {e}"))?;
+        self.inner
+            .set_head(&branch_ref)
+            .map_err(|e| format!("set HEAD: {e}"))?;
+        debug!(name, "switched branch");
+        Ok(())
+    }
+
     // -----------------------------------------------------------------------
     // Private helpers
     // -----------------------------------------------------------------------

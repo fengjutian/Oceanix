@@ -60,7 +60,7 @@ export default function ProblemsPanel() {
         height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
         color: "var(--text-secondary)", fontSize: 13,
       }}>
-        No problems detected — LSP not yet connected
+        No problems detected
       </div>
     );
   }

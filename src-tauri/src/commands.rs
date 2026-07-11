@@ -363,6 +363,30 @@ pub fn git_unstage(path: String, state: tauri::State<'_, crate::GitState>) -> Re
 }
 
 #[tauri::command]
+pub fn git_push(branch: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let repo = repo_from_state(&state)?;
+    repo.push("origin", &branch)
+}
+
+#[tauri::command]
+pub fn git_pull(branch: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let repo = repo_from_state(&state)?;
+    repo.pull("origin", &branch)
+}
+
+#[tauri::command]
+pub fn git_create_branch(name: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let repo = repo_from_state(&state)?;
+    repo.create_branch(&name)
+}
+
+#[tauri::command]
+pub fn git_switch_branch(name: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let repo = repo_from_state(&state)?;
+    repo.switch_branch(&name)
+}
+
+#[tauri::command]
 pub fn get_cwd() -> Result<String, String> {
     std::env::current_dir()
         .map(|p| p.to_string_lossy().to_string())

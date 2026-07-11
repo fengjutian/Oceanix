@@ -32,6 +32,7 @@ const DEFAULT_BINDINGS: KeyBinding[] = [
 ];
 
 function App() {
+  console.log("[STARTUP] App render start", Math.round(performance.now()) + "ms");
   const [sidebarView, setSidebarView] = useState("explorer");
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(true);
@@ -130,29 +131,7 @@ function App() {
   }, [tabs]);
 
   // ─── Quick Open ─────────────────────────────────────
-  const quickOpenCommands = useMemo<Command[]>(() => {
-    const fileCommands: Command[] = flatFiles.map((f) => ({
-      id: `file:${f.path}`,
-      label: f.name,
-      category: f.path.substring(0, f.path.lastIndexOf("/") + 1) || "Files",
-      action: () => {
-        const label = f.name;
-        const ext = label.split(".").pop() || "";
-        const langMap: Record<string, string> = {
-          ts: "typescript", tsx: "typescript", rs: "rust",
-          json: "json", md: "markdown", css: "css", html: "html",
-          toml: "toml", py: "python",
-        };
-        openTab({
-          id: f.path, path: f.path, label,
-          language: langMap[ext] || "plaintext",
-          content: "", dirty: false,
-        });
-      },
-    }));
-
-    return [
-    ...fileCommands,
+  const quickOpenCommands = useMemo<Command[]>(() => [
     {
       id: "theme.toggle",
       label: "Toggle Dark/Light Theme",
@@ -277,8 +256,7 @@ function App() {
       keybinding: "Ctrl+Shift+F",
       action: () => setSidebarView("search"),
     },
-  ];
-}, [activeTabId, saveTab, closeTab, openTab, flatFiles]);
+  ], [activeTabId, saveTab, closeTab, openTab]);
 
   // Always holds the latest commands so the keybinding registry
   // never needs to be rebuilt when command actions change.
@@ -314,7 +292,9 @@ function App() {
 
   // ─── Session restore ─────────────────────────────────
   useEffect(() => {
+    console.log("[STARTUP] Session restore effect", performance.now().toFixed(0) + "ms");
     loadSession().then((session) => {
+      console.log("[STARTUP] Session loaded", performance.now().toFixed(0) + "ms", session?.openFiles?.length, "files");
       if (session?.openFiles?.length) {
         const restoredTabs: EditorTab[] = session.openFiles.map((path, i) => ({
           id: `restored-${i}`,

@@ -31,6 +31,7 @@ pub fn file_write(path: String, content: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn file_read_dir(path: String) -> Result<Vec<FileEntry>, String> {
+    let start = std::time::Instant::now();
     let entries = std::fs::read_dir(&path).map_err(|e| format!("ReadDir error: {e}"))?;
     let mut result = Vec::new();
     for entry in entries {
@@ -43,6 +44,10 @@ pub fn file_read_dir(path: String) -> Result<Vec<FileEntry>, String> {
         });
     }
     result.sort_by(|a, b| a.name.cmp(&b.name));
+    let elapsed = start.elapsed();
+    if elapsed.as_millis() > 50 {
+        eprintln!("[PERF] file_read_dir({path}) took {elapsed:?} — {} entries", result.len());
+    }
     Ok(result)
 }
 
@@ -224,8 +229,16 @@ pub struct TerminalCreateResult {
 
 #[tauri::command]
 pub fn terminal_create(shell: Option<String>, state: tauri::State<'_, crate::PtyState>) -> Result<TerminalCreateResult, String> {
+    let start = std::time::Instant::now();
+    eprintln!("[PERF] terminal_create starting...");
+    let lock_start = std::time::Instant::now();
     let session = state.pty.lock().map_err(|e| format!("lock: {e}"))?;
+    eprintln!("[PERF] terminal_create lock acquired in {:?}", lock_start.elapsed());
+
+    let spawn_start = std::time::Instant::now();
     let result = session.spawn(shell.as_deref())?;
+    eprintln!("[PERF] terminal_create spawn done in {:?} (total {:?})", spawn_start.elapsed(), start.elapsed());
+
     Ok(TerminalCreateResult { id: result.id, pid: result.pid })
 }
 

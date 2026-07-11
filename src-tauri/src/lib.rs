@@ -29,6 +29,9 @@ pub struct PluginState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let startup = std::time::Instant::now();
+    eprintln!("[STARTUP] Initializing tracing... (+{:?})", startup.elapsed());
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
@@ -36,12 +39,12 @@ pub fn run() {
         .json()
         .init();
 
-    // Initialize AI bridge (Python sidecar spawned lazily)
+    eprintln!("[STARTUP] Creating managed state... (+{:?})", startup.elapsed());
     let ai_state = AiState {
         bridge: Mutex::new(oceanix_ai::AiBridge::new()),
     };
+    eprintln!("[STARTUP] ai_state done (+{:?})", startup.elapsed());
 
-    // Attempt to open git repo at current directory
     let git_state = GitState {
         project_root: Mutex::new(
             std::env::current_dir()
@@ -49,22 +52,24 @@ pub fn run() {
                 .map(|p| p.to_string_lossy().to_string())
         ),
     };
+    eprintln!("[STARTUP] git_state done (+{:?})", startup.elapsed());
 
-    // PTY session manager
     let pty_state = PtyState {
         pty: Mutex::new(PtySession::new()),
     };
+    eprintln!("[STARTUP] pty_state done (+{:?})", startup.elapsed());
 
-    // LSP client registry (lazy — spawned per language on demand)
     let lsp_state = LspState {
         clients: Mutex::new(HashMap::new()),
     };
+    eprintln!("[STARTUP] lsp_state done (+{:?})", startup.elapsed());
 
-    // Plugin registry
     let plugin_state = PluginState {
         registry: Mutex::new(PluginRegistry::new()),
     };
+    eprintln!("[STARTUP] plugin_state done (+{:?})", startup.elapsed());
 
+    eprintln!("[STARTUP] Building Tauri... (+{:?})", startup.elapsed());
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .manage(ai_state)
@@ -114,6 +119,10 @@ pub fn run() {
             commands::plugin_contributions,
             commands::get_cwd,
         ])
+        .setup(|_app| {
+            eprintln!("[STARTUP] Tauri setup callback");
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running Oceanix");
 }

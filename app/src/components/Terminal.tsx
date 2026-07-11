@@ -9,6 +9,7 @@ interface TerminalProps {
 }
 
 export default function Terminal({ id }: TerminalProps) {
+  console.log("[STARTUP] Terminal mount", Math.round(performance.now()) + "ms id=" + id);
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -17,6 +18,7 @@ export default function Terminal({ id }: TerminalProps) {
 
   useEffect(() => {
     if (!containerRef.current) return;
+    console.log("[STARTUP] Terminal useEffect start", Math.round(performance.now()) + "ms");
 
     const term = new XTerm({
       cursorBlink: true,
@@ -42,10 +44,12 @@ export default function Terminal({ id }: TerminalProps) {
     const handleResize = () => fitAddon.fit();
     window.addEventListener("resize", handleResize);
 
-    // Set up PTY connection
+    // Set up PTY connection — deferred to avoid blocking startup
     let cancelled = false;
 
-    (async () => {
+    // Defer PTY creation by 2s so the UI can render first
+    const ptyTimer = setTimeout(async () => {
+      if (cancelled) return;
       try {
         const result = await terminalCreate();
         if (cancelled) return;
@@ -92,7 +96,7 @@ export default function Terminal({ id }: TerminalProps) {
           termRef.current.writeln(`Failed to start terminal: ${err}`);
         }
       }
-    })();
+    }, 2000);
 
     return () => {
       cancelled = true;

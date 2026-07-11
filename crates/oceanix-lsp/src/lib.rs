@@ -337,13 +337,8 @@ impl LspClient {
 
     /// Poll for incoming messages (notifications) — call this regularly.
     pub fn poll(&self) -> Result<(), String> {
-        // Try to read any pending notifications without blocking.
-        // We peek at the reader buffer; if no data, return Ok.
-        let reader = &self.reader;
-        // BufReader::fill_buf is not on &self... we need a different approach.
-        // For simplicity, process messages that happen to be available.
-        // In production, we'd use non-blocking I/O or threads.
-        self.process_incoming()?;
+        // Notifications are now handled inline during read_response.
+        // poll() is a no-op retained for API compatibility.
         Ok(())
     }
 
@@ -447,13 +442,6 @@ impl LspClient {
         }
 
         serde_json::from_value(value).map_err(|e| format!("parse response: {e}"))
-    }
-
-    fn process_incoming(&self) -> Result<(), String> {
-        // Placeholder — notifications handled inline in read_response
-        #[allow(unused_variables)]
-        let _reader = &self.reader;
-        Ok(())
     }
 
     fn handle_notification(&self, method: &str, params: Option<&serde_json::Value>) {

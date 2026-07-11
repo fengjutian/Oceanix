@@ -41,25 +41,25 @@ async function buildFileTree(dirPath: string, dirName: string, depth: number): P
 
   try {
     const entries = await readDir(dirPath);
-    const children: FileNode[] = [];
+    const children: Promise<FileNode>[] = [];
 
     for (const entry of entries) {
       if (SKIP.has(entry.name)) continue;
       if (entry.isDir) {
-        children.push(await buildFileTree(entry.path, entry.name, depth - 1));
+        children.push(buildFileTree(entry.path, entry.name, depth - 1));
       } else {
-        children.push({ name: entry.name, path: entry.path, type: "file" });
+        children.push(Promise.resolve({ name: entry.name, path: entry.path, type: "file" as const }));
       }
     }
 
-    // Sort: directories first, then alphabetically
-    children.sort((a, b) => {
+    // Resolve all children concurrently
+    const resolved = await Promise.all(children);
+    resolved.sort((a, b) => {
       if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
-    node.children = children;
+    node.children = resolved;
   } catch {
-    // Permission denied, empty dir, etc. — return node without children
     node.children = [];
   }
 
@@ -67,6 +67,7 @@ async function buildFileTree(dirPath: string, dirName: string, depth: number): P
 }
 
 export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoaded }: SidebarProps) {
+  console.log("[STARTUP] Sidebar mount", Math.round(performance.now()) + "ms projectRoot=" + projectRoot);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Array<{ file: string; line: number; text: string }>>([]);
   const [fileTree, setFileTree] = useState<FileNode | null>(null);
@@ -78,7 +79,7 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
   const [gitBranch, setGitBranch] = useState("main");
   const [gitLoading, setGitLoading] = useState(false);
 
-  // Load file tree when explorer view becomes active
+  // Load file tree when explorer view becomes active (deferred to avoid blocking initial render)
   useEffect(() => {
     if (view !== "explorer") return;
     if (fileTree) return; // already loaded
@@ -87,23 +88,30 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
     setTreeLoading(true);
     setTreeError(null);
 
-    const rootName = projectRoot.split(/[/\\]/).pop() || projectRoot;
-    buildFileTree(projectRoot, rootName, 2)
-      .then((tree) => {
-        if (!cancelled) {
-          setFileTree(tree);
-          onFileTreeLoaded?.(flattenFiles(tree));
-          setTreeLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setTreeError(String(err));
-          setTreeLoading(false);
-        }
-      });
+    // Defer loading by 100ms to let the initial UI render first
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      console.log("[STARTUP] Sidebar buildFileTree start", performance.now().toFixed(0) + "ms");
+      const rootName = projectRoot.split(/[/\\]/).pop() || projectRoot;
+      buildFileTree(projectRoot, rootName, 2)
+        .then((tree) => {
+          if (!cancelled) {
+            console.log("[STARTUP] Sidebar buildFileTree done", performance.now().toFixed(0) + "ms", "directories loaded");
+            setFileTree(tree);
+            // Defer flattening to avoid blocking
+            requestIdleCallback(() => onFileTreeLoaded?.(flattenFiles(tree)), { timeout: 2000 });
+            setTreeLoading(false);
+          }
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            setTreeError(String(err));
+            setTreeLoading(false);
+          }
+        });
+    }, 100);
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [view, projectRoot]);
 
   // Reload file tree

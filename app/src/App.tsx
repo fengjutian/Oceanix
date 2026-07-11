@@ -33,6 +33,40 @@ const DEFAULT_BINDINGS: KeyBinding[] = [
 
 function App() {
   console.log("[STARTUP] App render start", Math.round(performance.now()) + "ms");
+
+  // Keep debug overlay visible but minimal — shows if anything blocks
+  useEffect(() => {
+    const overlay = document.getElementById("debug-overlay");
+    if (overlay) {
+      console.log("[STARTUP] React mounted");
+      overlay.style.cssText = "position:fixed;top:4px;right:4px;z-index:99999;background:rgba(0,0,0,0.85);color:#0f0;font-family:monospace;font-size:11px;padding:6px 10px;border-radius:4px;max-width:300px;pointer-events:none;";
+      const logEl = document.getElementById("debug-log");
+      if (logEl) {
+        // Keep only last 8 lines
+        const lines = logEl.querySelectorAll("div");
+        const keep = Math.max(0, lines.length - 8);
+        for (let i = 0; i < keep; i++) lines[i].remove();
+      }
+      // Update with live counter
+      let counter = 0;
+      setInterval(() => {
+        counter++;
+        const counterEl = document.getElementById("debug-counter");
+        if (counterEl) counterEl.textContent = ` | +${counter}s`;
+      }, 1000);
+      const counterSpan = document.createElement("span");
+      counterSpan.id = "debug-counter";
+      counterSpan.textContent = " | +0s";
+      overlay.appendChild(counterSpan);
+
+      // If React is still alive after 5s, shrink further
+      setTimeout(() => {
+        overlay.style.fontSize = "10px";
+        overlay.style.padding = "4px 6px";
+        overlay.style.opacity = "0.6";
+      }, 5000);
+    }
+  }, []);
   const [sidebarView, setSidebarView] = useState("explorer");
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(true);

@@ -16,11 +16,79 @@ logger.remove()
 logger.add(sys.stderr, level="INFO", format="<green>{time:HH:mm:ss}</green> | {level:<7} | {message}")
 
 from fastmcp import FastMCP
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 mcp = FastMCP(
     "Oceanix AI",
-    description="Oceanix code editor AI assistant — code completion and chat",
+    description="Oceanix code editor AI assistant — code completion, chat, and agent",
 )
+
+
+# ── RAG codebase search tool ────────────────────────────
+
+@mcp.tool()
+def search_codebase(query: str, top_k: int = 10) -> dict:
+    """Search the codebase for relevant code chunks.
+
+    Args:
+        query: Natural language query or code snippet to search for.
+        top_k: Number of results to return (default 10).
+    """
+    from .rag import search_codebase as search_fn
+    results = search_fn(query, top_k=top_k)
+    return {"results": results, "count": len(results)}
+
+
+@mcp.tool()
+def rebuild_index() -> str:
+    """Rebuild the codebase search index. Call this when files change significantly."""
+    from .rag import rebuild_index
+    rebuild_index()
+    return "Index rebuild started"
+
+
+# ── Agent execution tool ────────────────────────────────
+
+@mcp.tool()
+def agent_execute(task: str, max_steps: int = 10) -> dict:
+    """Execute an autonomous agent task using the editor tools.
+
+    The agent will plan, execute tools, and report results.
+
+    Args:
+        task: Description of what the agent should do.
+        max_steps: Maximum execution steps (default 10).
+    """
+    logger.info(f"Agent task: {task[:100]}")
+
+    from .agent import get_agent
+    agent = get_agent()
+
+    try:
+        result = agent.invoke(
+            {
+                "task": task,
+                "messages": [HumanMessage(content=task)],
+                "plan": [],
+                "current_step": 0,
+                "result": "",
+            },
+            config={"recursion_limit": max_steps * 2},  # each step is ~2 graph transitions
+        )
+
+        return {
+            "status": "completed",
+            "plan": result.get("plan", []),
+            "steps_completed": result.get("current_step", 0),
+            "result": result.get("result", "Done"),
+            "messages": [
+                {"role": msg.__class__.__name__, "content": str(msg.content)[:500]}
+                for msg in result.get("messages", [])[-5:]  # Last 5 messages
+            ],
+        }
+    except Exception as e:
+        logger.error(f"Agent failed: {e}")
+        return {"status": "error", "error": str(e)}
 
 
 # ── Completion tool ────────────────────────────────────
@@ -96,15 +164,13 @@ def chat(
     if not provider:
         return "AI service is not configured. Please set OPENAI_API_KEY or ANTHROPIC_API_KEY."
 
-    from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+    from .prompts import SYSTEM_PROMPT
 
     role_map = {
         "system": SystemMessage,
         "user": HumanMessage,
         "assistant": AIMessage,
     }
-
-    from .prompts import SYSTEM_PROMPT
 
     lc_messages = [SystemMessage(content=SYSTEM_PROMPT)]
     for msg in messages:

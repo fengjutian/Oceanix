@@ -39,7 +39,7 @@ function App() {
   const { t, locale, setLocale } = useLocale();
   const [sidebarView, setSidebarView] = useState("explorer");
   const [sidebarVisible, setSidebarVisible] = useState(true);
-  const [panelVisible, setPanelVisible] = useState(true);
+  const [panelVisible, setPanelVisible] = useState(false);
   const [panelTab, setPanelTab] = useState<"terminal" | "problems" | "output">("terminal");
   const [showPalette, setShowPalette] = useState(false);
   const [showSettings, setShowSettings] = useState(false);

@@ -1,6 +1,6 @@
 mod commands;
 
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use commands::AiState;
 use std::sync::Mutex;
 use std::sync::Arc;
@@ -149,13 +149,21 @@ pub fn run() {
             // Enable dark title bar on Windows 10/11
             #[cfg(target_os = "windows")]
             {
-                use windows::Win32::Graphics::Dwm::{
-                    DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE,
-                };
+                use std::ffi::c_void;
+                extern "system" {
+                    fn DwmSetWindowAttribute(
+                        hwnd: *mut c_void,
+                        dw_attribute: u32,
+                        pv_attribute: *const c_void,
+                        cb_attribute: u32,
+                    ) -> i32;
+                }
+                const DWMWA_USE_IMMERSIVE_DARK_MODE: u32 = 20;
                 if let Some(window) = app.get_webview_window("main") {
                     if let Ok(hwnd) = window.hwnd() {
-                        let use_dark = 1u32; // TRUE
+                        let use_dark: u32 = 1;
                         unsafe {
+                            let hwnd: *mut c_void = std::mem::transmute(hwnd);
                             let _ = DwmSetWindowAttribute(
                                 hwnd,
                                 DWMWA_USE_IMMERSIVE_DARK_MODE,

@@ -99,6 +99,18 @@ def list_conversations(root: str, limit: int = 20) -> list[dict]:
     return result
 
 
+def delete_conversation(root: str, conversation_id: str) -> bool:
+    """Delete a saved conversation. Returns True if deleted, False if not found."""
+    safe_id = _safe_name(conversation_id)
+    base = _ensure_dirs(root)
+    fpath = base / CONVERSATIONS_DIR / f"{safe_id}.json"
+    if not fpath.exists():
+        return False
+    fpath.unlink()
+    logger.debug(f"Deleted conversation {conversation_id}")
+    return True
+
+
 # ── Project Facts ───────────────────────────────────────
 
 

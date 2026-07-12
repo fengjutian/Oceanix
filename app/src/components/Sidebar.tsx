@@ -10,7 +10,9 @@ import {
   gitStashSave, gitStashList, gitStashPop, gitStashApply, gitStashDrop,
   gitLog,
   searchInFiles,
+  ragSearch, ragRebuild, ragStats,
 } from "../services/api";
+import type { RAGResult } from "../services/api";
 import { useLocale } from "../i18n/LocaleContext";
 
 interface SidebarProps {
@@ -21,6 +23,10 @@ interface SidebarProps {
   onFileSelect?: (path: string) => void;
   projectRoot: string;
   onFileTreeLoaded?: (files: Array<{ path: string; name: string }>) => void;
+  /** Selected code context to pre-fill in AI chat */
+  selectionContext?: { code: string; file: string; language: string } | null;
+  /** Current editor context sent with each chat message */
+  editorContext?: { openFiles: string[]; activeFile: string } | null;
 }
 
 function flattenFiles(node: FileNode): Array<{ path: string; name: string }> {
@@ -60,7 +66,8 @@ async function buildFileTree(dirPath: string, dirName: string, depth: number): P
       if (entry.isDir) {
         children.push(buildFileTree(entry.path, entry.name, depth - 1));
       } else {
-        children.push(Promise.resolve({ name: entry.name, path: entry.path, type: "file" as const }));
+        const ext = entry.name.includes(".") ? entry.name.split(".").pop()?.toLowerCase() || "" : "";
+        children.push(Promise.resolve({ name: entry.name, path: entry.path, type: "file" as const, extension: ext }));
       }
     }
 
@@ -78,7 +85,7 @@ async function buildFileTree(dirPath: string, dirName: string, depth: number): P
   return node;
 }
 
-export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, onFileTreeLoaded }: SidebarProps) {
+export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, onFileTreeLoaded, selectionContext, editorContext }: SidebarProps) {
   const { t } = useLocale();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Array<{ file: string; line: number; text: string }>>([]);
@@ -94,6 +101,13 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
   const [gitError, setGitError] = useState<string | null>(null);
   const [gitStashes, setGitStashes] = useState<GitStashInfo[]>([]);
   const [gitLogEntries, setGitLogEntries] = useState<GitCommitInfo[]>([]);
+
+  // RAG state
+  const [ragQuery, setRagQuery] = useState("");
+  const [ragResults, setRagResults] = useState<RAGResult[]>([]);
+  const [ragLoading, setRagLoading] = useState(false);
+  const [ragError, setRagError] = useState<string | null>(null);
+  const [ragStatsData, setRagStatsData] = useState<{ chunks: number; files: number; languages: string[] } | null>(null);
 
   // Reset file tree when project root changes
   useEffect(() => {
@@ -529,10 +543,135 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
           />
         )
       )}
-      {view === "ai" && <ChatPanel />}
+      {view === "ai" && <ChatPanel selectionContext={selectionContext} editorContext={editorContext} />}
       {view === "rag" && (
-        <div style={{ padding: 12, color: "var(--text-secondary)" }}>
-          RAG — Retrieval-Augmented Generation
+        <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+          {/* Header */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "4px 8px", fontSize: 11, fontWeight: 600,
+            color: "var(--text-secondary)", textTransform: "uppercase",
+            letterSpacing: "0.5px", borderBottom: "1px solid var(--border-color)",
+          }}>
+            <span>{t("sidebar.rag")}</span>
+            <button
+              onClick={async () => {
+                setRagLoading(true);
+                setRagError(null);
+                try {
+                  const stats = await ragRebuild();
+                  setRagStatsData(stats);
+                } catch (e) {
+                  setRagError(String(e));
+                } finally {
+                  setRagLoading(false);
+                }
+              }}
+              disabled={ragLoading}
+              title={t("rag.rebuild")}
+              style={{
+                background: "none", border: "none", color: "var(--text-secondary)",
+                cursor: "pointer", fontSize: 14, padding: "0 4px", lineHeight: 1,
+              }}
+            >
+              ↻
+            </button>
+          </div>
+
+          {/* Stats bar */}
+          {ragStatsData && (
+            <div style={{
+              padding: "4px 8px", fontSize: 11, color: "var(--text-tertiary)",
+              borderBottom: "1px solid var(--border-color)",
+              display: "flex", gap: 12,
+            }}>
+              <span>{ragStatsData.files} files</span>
+              <span>{ragStatsData.chunks} chunks</span>
+            </div>
+          )}
+
+          {/* Search input */}
+          <div style={{ padding: 8 }}>
+            <input
+              style={{
+                width: "100%", padding: "6px 8px",
+                background: "var(--bg-tertiary)", border: "1px solid var(--border-color)",
+                color: "var(--text-primary)", fontSize: 13, borderRadius: 4, outline: "none",
+              }}
+              placeholder={t("rag.searchPlaceholder")}
+              value={ragQuery}
+              onChange={(e) => setRagQuery(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === "Enter" && ragQuery.trim()) {
+                  setRagLoading(true);
+                  setRagError(null);
+                  try {
+                    const res = await ragSearch(ragQuery);
+                    setRagResults(res.results);
+                    if (res.results.length === 0) setRagError(t("rag.noResults"));
+                  } catch (err) {
+                    setRagError(String(err));
+                  } finally {
+                    setRagLoading(false);
+                  }
+                }
+              }}
+            />
+          </div>
+
+          {/* Results */}
+          <div style={{ flex: 1, overflow: "auto" }}>
+            {ragLoading && (
+              <div style={{ padding: 12, color: "var(--text-secondary)", fontSize: 13 }}>
+                {t("sidebar.loading")}
+              </div>
+            )}
+            {ragError && (
+              <div style={{ padding: 12, color: "var(--text-error)", fontSize: 12 }}>
+                {ragError}
+              </div>
+            )}
+            {!ragLoading && !ragError && ragResults.length > 0 && (
+              <div>
+                {ragResults.map((r, i) => {
+                  const fileName = r.file.replace(/\\/g, "/").split("/").pop() || r.file;
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        padding: "6px 8px", fontSize: 12, cursor: "pointer",
+                        color: "var(--text-primary)", borderBottom: "1px solid var(--border-color)",
+                      }}
+                      onClick={() => handleOpenFile(r.file)}
+                      title={`${r.file}:${r.start_line}-${r.end_line} (score: ${r.score.toFixed(2)})`}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                        <span style={{ fontWeight: 600, fontSize: 11, color: "var(--text-secondary)" }}>
+                          {fileName}:{r.start_line}-{r.end_line}
+                        </span>
+                        <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
+                          {r.score.toFixed(2)}
+                        </span>
+                      </div>
+                      <div style={{
+                        color: "var(--text-secondary)", whiteSpace: "pre",
+                        overflow: "hidden", textOverflow: "ellipsis",
+                        fontSize: 11, fontFamily: "var(--font-mono)",
+                        maxHeight: 36, lineHeight: "18px",
+                      }}>
+                        {r.content.slice(0, 200)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {!ragLoading && !ragError && ragResults.length === 0 && !ragQuery && (
+              <div style={{ padding: 12, color: "var(--text-secondary)", fontSize: 13 }}>
+                {t("rag.searchPlaceholder")}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

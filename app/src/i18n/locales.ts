@@ -38,6 +38,7 @@ export interface LocaleStrings {
   "menu.selection.addCursorAbove": string;
   "menu.selection.addCursorBelow": string;
   "menu.selection.selectAllOccurrences": string;
+  "menu.selection.askOceanix": string;
 
   // ── Menu: View ─────────────────────────────────
   "menu.view": string;
@@ -91,6 +92,9 @@ export interface LocaleStrings {
   "sidebar.aiChat": string;
   "sidebar.aiStreaming": string;
   "sidebar.rag": string;
+  "rag.searchPlaceholder": string;
+  "rag.rebuild": string;
+  "rag.noResults": string;
   "sidebar.loading": string;
   "sidebar.retry": string;
   "sidebar.failedLoad": string;
@@ -122,6 +126,47 @@ export interface LocaleStrings {
   "chat.you": string;
   "chat.ai": string;
   "chat.noProvider": string;
+  "chat.history": string;
+  "chat.newChat": string;
+  "chat.deleteChat": string;
+  "chat.noHistory": string;
+  "chat.saveError": string;
+  "chat.loadError": string;
+
+  // ── Settings ───────────────────────────────────
+  "settings.searchPlaceholder": string;
+  "settings.group.appearance": string;
+  "settings.group.editor": string;
+  "settings.label.theme": string;
+  "settings.label.fontSize": string;
+  "settings.label.fontFamily": string;
+  "settings.label.minimap": string;
+  "settings.label.tabSize": string;
+  "settings.label.insertSpaces": string;
+  "settings.label.wordWrap": string;
+  "settings.label.autoSave": string;
+  "settings.label.autoSaveDelay": string;
+  "settings.desc.theme": string;
+  "settings.desc.fontSize": string;
+  "settings.desc.fontFamily": string;
+  "settings.desc.minimap": string;
+  "settings.desc.tabSize": string;
+  "settings.desc.insertSpaces": string;
+  "settings.desc.wordWrap": string;
+  "settings.desc.autoSave": string;
+  "settings.desc.autoSaveDelay": string;
+  "settings.option.dark": string;
+  "settings.option.light": string;
+  "settings.option.off": string;
+  "settings.option.on": string;
+  "settings.option.wordWrapColumn": string;
+  "settings.option.afterDelay": string;
+  "settings.option.onFocusChange": string;
+
+  // ── AI Settings ────────────────────────────────
+  "settings.group.ai": string;
+  "settings.label.aiModel": string;
+  "settings.desc.aiModel": string;
 
   // ── Common ─────────────────────────────────────
   "common.justNow": string;
@@ -161,6 +206,7 @@ const en: LocaleStrings = {
   "menu.selection.addCursorAbove": "Add Cursor Above",
   "menu.selection.addCursorBelow": "Add Cursor Below",
   "menu.selection.selectAllOccurrences": "Select All Occurrences",
+  "menu.selection.askOceanix": "Ask Oceanix",
 
   // Menu: View
   "menu.view": "View",
@@ -213,7 +259,10 @@ const en: LocaleStrings = {
   "sidebar.searchNoResults": "No results found",
   "sidebar.aiChat": "AI Chat",
   "sidebar.aiStreaming": "streaming",
-  "sidebar.rag": "RAG — Retrieval-Augmented Generation",
+  "sidebar.rag": "RAG",
+  "rag.searchPlaceholder": "Search codebase...",
+  "rag.rebuild": "Rebuild index",
+  "rag.noResults": "No results found. Try rebuilding the index.",
   "sidebar.loading": "Loading...",
   "sidebar.retry": "Retry",
   "sidebar.failedLoad": "Failed to load:",
@@ -245,6 +294,47 @@ const en: LocaleStrings = {
   "chat.you": "You",
   "chat.ai": "AI",
   "chat.noProvider": "AI service is not configured. Please set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+  "chat.history": "History",
+  "chat.newChat": "New Chat",
+  "chat.deleteChat": "Delete",
+  "chat.noHistory": "No saved conversations",
+  "chat.saveError": "Failed to save conversation",
+  "chat.loadError": "Failed to load conversation",
+
+  // Settings
+  "settings.searchPlaceholder": "Search settings...",
+  "settings.group.appearance": "Appearance",
+  "settings.group.editor": "Editor",
+  "settings.label.theme": "Color Theme",
+  "settings.label.fontSize": "Font Size",
+  "settings.label.fontFamily": "Font Family",
+  "settings.label.minimap": "Minimap",
+  "settings.label.tabSize": "Tab Size",
+  "settings.label.insertSpaces": "Insert Spaces",
+  "settings.label.wordWrap": "Word Wrap",
+  "settings.label.autoSave": "Auto Save",
+  "settings.label.autoSaveDelay": "Auto Save Delay",
+  "settings.desc.theme": "Specifies the color theme used in the editor.",
+  "settings.desc.fontSize": "Controls the font size in pixels.",
+  "settings.desc.fontFamily": "Controls the font family.",
+  "settings.desc.minimap": "Controls whether the minimap is shown.",
+  "settings.desc.tabSize": "The number of spaces a tab is equal to.",
+  "settings.desc.insertSpaces": "Insert spaces when pressing Tab.",
+  "settings.desc.wordWrap": "Controls how lines should wrap.",
+  "settings.desc.autoSave": "Controls auto save of dirty editors.",
+  "settings.desc.autoSaveDelay": "Controls the delay in ms after which auto save runs.",
+  "settings.option.dark": "Dark",
+  "settings.option.light": "Light",
+  "settings.option.off": "Off",
+  "settings.option.on": "On",
+  "settings.option.wordWrapColumn": "Column",
+  "settings.option.afterDelay": "After Delay",
+  "settings.option.onFocusChange": "On Focus Change",
+
+  // AI Settings
+  "settings.group.ai": "AI",
+  "settings.label.aiModel": "AI Model",
+  "settings.desc.aiModel": "Select the AI model for chat and completions.",
 
   // Common
   "common.justNow": "Just now",
@@ -284,6 +374,7 @@ const zh: LocaleStrings = {
   "menu.selection.addCursorAbove": "向上添加光标",
   "menu.selection.addCursorBelow": "向下添加光标",
   "menu.selection.selectAllOccurrences": "选择所有匹配项",
+  "menu.selection.askOceanix": "询问 Oceanix",
 
   // Menu: View
   "menu.view": "查看",
@@ -336,7 +427,10 @@ const zh: LocaleStrings = {
   "sidebar.searchNoResults": "未找到结果",
   "sidebar.aiChat": "AI 对话",
   "sidebar.aiStreaming": "流式输出中",
-  "sidebar.rag": "RAG — 检索增强生成",
+  "sidebar.rag": "RAG",
+  "rag.searchPlaceholder": "搜索代码库...",
+  "rag.rebuild": "重建索引",
+  "rag.noResults": "未找到结果。尝试重建索引。",
   "sidebar.loading": "加载中...",
   "sidebar.retry": "重试",
   "sidebar.failedLoad": "加载失败：",
@@ -368,6 +462,47 @@ const zh: LocaleStrings = {
   "chat.you": "你",
   "chat.ai": "AI",
   "chat.noProvider": "AI 服务未配置，请设置 OPENAI_API_KEY 或 ANTHROPIC_API_KEY。",
+  "chat.history": "历史记录",
+  "chat.newChat": "新建对话",
+  "chat.deleteChat": "删除",
+  "chat.noHistory": "暂无保存的对话",
+  "chat.saveError": "对话保存失败",
+  "chat.loadError": "对话加载失败",
+
+  // Settings
+  "settings.searchPlaceholder": "搜索设置...",
+  "settings.group.appearance": "外观",
+  "settings.group.editor": "编辑器",
+  "settings.label.theme": "颜色主题",
+  "settings.label.fontSize": "字体大小",
+  "settings.label.fontFamily": "字体族",
+  "settings.label.minimap": "小地图",
+  "settings.label.tabSize": "Tab 大小",
+  "settings.label.insertSpaces": "插入空格",
+  "settings.label.wordWrap": "自动换行",
+  "settings.label.autoSave": "自动保存",
+  "settings.label.autoSaveDelay": "自动保存延迟",
+  "settings.desc.theme": "指定编辑器中使用的颜色主题。",
+  "settings.desc.fontSize": "控制字体大小（像素）。",
+  "settings.desc.fontFamily": "控制字体族。",
+  "settings.desc.minimap": "控制是否显示小地图。",
+  "settings.desc.tabSize": "一个 Tab 等于的空格数。",
+  "settings.desc.insertSpaces": "按 Tab 时插入空格。",
+  "settings.desc.wordWrap": "控制行的换行方式。",
+  "settings.desc.autoSave": "控制脏编辑器的自动保存。",
+  "settings.desc.autoSaveDelay": "控制自动保存延迟（毫秒）。",
+  "settings.option.dark": "暗色",
+  "settings.option.light": "亮色",
+  "settings.option.off": "关闭",
+  "settings.option.on": "开启",
+  "settings.option.wordWrapColumn": "按列",
+  "settings.option.afterDelay": "延迟后",
+  "settings.option.onFocusChange": "焦点切换时",
+
+  // AI Settings
+  "settings.group.ai": "AI",
+  "settings.label.aiModel": "AI 模型",
+  "settings.desc.aiModel": "选择用于对话和补全的 AI 模型。",
 
   // Common
   "common.justNow": "刚刚",

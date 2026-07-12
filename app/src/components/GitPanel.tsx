@@ -121,27 +121,27 @@ export default function GitPanel({
       <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
         {onPush && (
           <button onClick={onPush} title="Push" style={smallBtn}>
-            ↑ Push
+            ↑
           </button>
         )}
         {onPull && (
           <button onClick={onPull} title="Pull" style={smallBtn}>
-            ↓ Pull
+            ↓
           </button>
         )}
         {onFetch && (
           <button onClick={onFetch} title="Fetch (no merge)" style={smallBtn}>
-            ⇣ Fetch
+            ⇣
           </button>
         )}
         <button onClick={() => { setShowNewBranch(!showNewBranch); setNewBranch(""); }} style={smallBtn}>
-          + Branch
+          ⎇+
         </button>
         <button onClick={() => { setShowStash(!showStash); if (!showStash) onLoadStashes?.(); }} style={smallBtn}>
-          📦 Stash
+          📦
         </button>
         <button onClick={() => { setShowLog(!showLog); if (!showLog) onLogLoad?.(); }} style={smallBtn}>
-          📋 Log
+          📋
         </button>
         <button onClick={onRefresh} title="Refresh" style={{ ...smallBtn, marginLeft: "auto" }}>
           ↻
@@ -174,7 +174,7 @@ export default function GitPanel({
             }}
             style={smallBtn}
           >
-            Create
+            ✓
           </button>
         </div>
       )}
@@ -192,7 +192,7 @@ export default function GitPanel({
         />
         <div style={{ marginTop: 4, display: "flex", gap: 6 }}>
           <button style={accentBtn} onClick={doCommit}>
-            Commit (Ctrl+Enter)
+            ✓ Commit
           </button>
         </div>
       </div>
@@ -208,15 +208,15 @@ export default function GitPanel({
                 <input style={{ ...inputStyle, padding: "2px 4px", fontSize: 11, flex: 1 }} placeholder="Stash message..."
                   value={stashMsg} onChange={(e) => setStashMsg(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { onStashSave?.(stashMsg || undefined); setStashMsg(""); } }} />
-                <button style={{ ...smallBtn, fontSize: 10 }} onClick={() => { onStashSave?.(stashMsg || undefined); setStashMsg(""); }}>Save</button>
+                <button style={{ ...smallBtn, fontSize: 10 }} onClick={() => { onStashSave?.(stashMsg || undefined); setStashMsg(""); }}>✓</button>
               </div>
             </div>
             {stashes && stashes.length > 0 ? stashes.map((s) => (
               <div key={s.index} style={rowStyle}>
                 <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>stash@{"{"}{s.index}{"}"}: {s.message || s.oid.slice(0, 7)}</span>
                 <div style={{ marginLeft: "auto", display: "flex", gap: 3 }}>
-                  <button style={{ ...smallBtn, fontSize: 10, padding: "0 4px" }} onClick={() => onStashApply?.(s.index)} title="Apply">Apply</button>
-                  <button style={{ ...smallBtn, fontSize: 10, padding: "0 4px" }} onClick={() => onStashPop?.(s.index)} title="Pop">Pop</button>
+                  <button style={{ ...smallBtn, fontSize: 10, padding: "0 4px" }} onClick={() => onStashApply?.(s.index)} title="Apply">↩</button>
+                  <button style={{ ...smallBtn, fontSize: 10, padding: "0 4px" }} onClick={() => onStashPop?.(s.index)} title="Pop">↩✕</button>
                   <button style={{ ...smallBtn, fontSize: 10, padding: "0 4px", color: "#f44747" }} onClick={() => onStashDrop?.(s.index)} title="Drop">✕</button>
                 </div>
               </div>
@@ -248,7 +248,7 @@ export default function GitPanel({
             <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
               Staged ({staged.length})
               {onUnstageAll && (
-                <button onClick={onUnstageAll} style={{ ...smallBtn, fontSize: 10, padding: "0 6px" }} title="Unstage all">Unstage all</button>
+                <button onClick={onUnstageAll} style={{ ...smallBtn, fontSize: 10, padding: "0 6px" }} title="Unstage all">↩</button>
               )}
             </div>
             {staged.map((f) => (
@@ -263,7 +263,7 @@ export default function GitPanel({
             <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
               Changes ({changes.length})
               {onStageAll && (
-                <button onClick={onStageAll} style={{ ...smallBtn, fontSize: 10, padding: "0 6px" }} title="Stage all changes">Stage all</button>
+                <button onClick={onStageAll} style={{ ...smallBtn, fontSize: 10, padding: "0 6px" }} title="Stage all changes">⊞</button>
               )}
             </div>
             {changes.map((f) => (
@@ -278,7 +278,7 @@ export default function GitPanel({
             <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
               Untracked ({untracked.length})
               {onStageAll && (
-                <button onClick={onStageAll} style={{ ...smallBtn, fontSize: 10, padding: "0 6px" }} title="Stage all untracked">Stage all</button>
+                <button onClick={onStageAll} style={{ ...smallBtn, fontSize: 10, padding: "0 6px" }} title="Stage all untracked">⊞</button>
               )}
             </div>
             {untracked.map((f) => (

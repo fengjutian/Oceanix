@@ -24,29 +24,6 @@ mcp = FastMCP(
 )
 
 
-# ── RAG codebase search tool ────────────────────────────
-
-@mcp.tool()
-def search_codebase(query: str, top_k: int = 10) -> dict:
-    """Search the codebase for relevant code chunks.
-
-    Args:
-        query: Natural language query or code snippet to search for.
-        top_k: Number of results to return (default 10).
-    """
-    from .rag import search_codebase as search_fn
-    results = search_fn(query, top_k=top_k)
-    return {"results": results, "count": len(results)}
-
-
-@mcp.tool()
-def rebuild_index() -> str:
-    """Rebuild the codebase search index. Call this when files change significantly."""
-    from .rag import rebuild_index
-    rebuild_index()
-    return "Index rebuild started"
-
-
 # ── Agent execution tool ────────────────────────────────
 
 @mcp.tool()
@@ -253,58 +230,99 @@ def rag_stats() -> dict:
 # ── LLM Provider ───────────────────────────────────────
 
 _llm = None
+_llm_model = None
 _llm_checked = False
 
 
-def _get_llm():
+def _get_llm(model: str | None = None):
     """Lazy-init the LLM provider chain.
     
+    If `model` is provided and differs from the cached model, re-initialize.
     Public so http_api.py can reuse the same provider."""
-    global _llm, _llm_checked
-    if _llm is not None:
+    global _llm, _llm_model, _llm_checked
+    if _llm is not None and (model is None or model == _llm_model):
         return _llm
-    if _llm_checked:
+    if _llm_checked and model is None:
         return None
-    _llm_checked = True
 
-    # Priority: Anthropic > OpenAI > Ollama (local)
-    if os.environ.get("ANTHROPIC_API_KEY"):
+    # Determine which model to use
+    selected_model = model or ""
+
+    # ── DeepSeek (OpenAI-compatible API) ──────────────
+    if os.environ.get("DEEPSEEK_API_KEY") and (
+        selected_model.startswith("deepseek-") or not selected_model
+    ):
         try:
-            from langchain_anthropic import ChatAnthropic
-            _llm = ChatAnthropic(
-                model=os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+            from langchain_openai import ChatOpenAI
+            deepseek_model = selected_model if selected_model.startswith("deepseek-") else os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro")
+            _llm = ChatOpenAI(
+                model=deepseek_model,
+                base_url="https://api.deepseek.com/v1",
+                api_key=os.environ["DEEPSEEK_API_KEY"],
                 max_tokens=4096,
                 streaming=True,
             )
-            logger.info("Using Anthropic Claude")
+            _llm_model = deepseek_model
+            _llm_checked = True
+            logger.info(f"Using DeepSeek: {deepseek_model}")
+            return _llm
+        except Exception as e:
+            logger.warning(f"DeepSeek init failed: {e}")
+
+    # ── Anthropic ─────────────────────────────────────
+    if os.environ.get("ANTHROPIC_API_KEY") and (
+        selected_model.startswith("claude-") or not selected_model
+    ):
+        try:
+            from langchain_anthropic import ChatAnthropic
+            anthropic_model = selected_model if selected_model.startswith("claude-") else os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+            _llm = ChatAnthropic(
+                model=anthropic_model,
+                max_tokens=4096,
+                streaming=True,
+            )
+            _llm_model = anthropic_model
+            _llm_checked = True
+            logger.info(f"Using Anthropic Claude: {anthropic_model}")
             return _llm
         except Exception as e:
             logger.warning(f"Anthropic init failed: {e}")
 
-    if os.environ.get("OPENAI_API_KEY"):
+    # ── OpenAI ────────────────────────────────────────
+    if os.environ.get("OPENAI_API_KEY") and (
+        selected_model.startswith("gpt-") or selected_model.startswith("o1") or selected_model.startswith("o3") or not selected_model
+    ):
         try:
             from langchain_openai import ChatOpenAI
+            openai_model = selected_model if selected_model else os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
             _llm = ChatOpenAI(
-                model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+                model=openai_model,
                 max_tokens=4096,
                 streaming=True,
             )
-            logger.info("Using OpenAI")
+            _llm_model = openai_model
+            _llm_checked = True
+            logger.info(f"Using OpenAI: {openai_model}")
             return _llm
         except Exception as e:
             logger.warning(f"OpenAI init failed: {e}")
 
+    # ── Ollama (local) ────────────────────────────────
     if os.environ.get("OLLAMA_HOST"):
         try:
             from langchain_ollama import ChatOllama
+            ollama_model = selected_model if selected_model else os.environ.get("OLLAMA_MODEL", "codellama")
             _llm = ChatOllama(
-                model=os.environ.get("OLLAMA_MODEL", "codellama"),
+                model=ollama_model,
             )
-            logger.info("Using Ollama (local)")
+            _llm_model = ollama_model
+            _llm_checked = True
+            logger.info(f"Using Ollama (local): {ollama_model}")
             return _llm
         except Exception as e:
             logger.warning(f"Ollama init failed: {e}")
 
+    _llm_checked = True
     logger.warning("No LLM provider configured")
     return None
 

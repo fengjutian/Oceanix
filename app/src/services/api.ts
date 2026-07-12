@@ -51,6 +51,8 @@ export interface EditorSettings {
   minimap: boolean;
   autoSave: "off" | "afterDelay" | "onFocusChange" | "onWindowChange";
   autoSaveDelay: number;
+  /** AI model identifier (e.g. "deepseek-v4-pro", "gpt-4o-mini") */
+  aiModel: string;
 }
 
 export async function loadSettings(): Promise<EditorSettings> {
@@ -481,6 +483,52 @@ export async function aiStreamChat(
   }, 20);
 }
 
+// ─── Conversation History ────────────────────────────
+
+const AI_HTTP = "http://127.0.0.1:11435";
+
+export interface ConvMeta {
+  id: string;
+  timestamp: string;
+  message_count: number;
+}
+
+export interface SavedConversation {
+  id: string;
+  timestamp: string;
+  message_count: number;
+  messages: Array<{ role: string; content: string }>;
+}
+
+export async function listConversations(limit = 20): Promise<ConvMeta[]> {
+  const res = await fetch(`${AI_HTTP}/conversations?limit=${limit}`);
+  if (!res.ok) throw new Error(`Failed to list conversations: ${res.status}`);
+  const data = await res.json();
+  return data.conversations ?? [];
+}
+
+export async function loadConversation(id: string): Promise<SavedConversation> {
+  const res = await fetch(`${AI_HTTP}/conversations/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(`Failed to load conversation: ${res.status}`);
+  return res.json();
+}
+
+export async function saveConversation(id: string, messages: Array<{ role: string; content: string }>): Promise<void> {
+  const res = await fetch(`${AI_HTTP}/conversations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, messages }),
+  });
+  if (!res.ok) throw new Error(`Failed to save conversation: ${res.status}`);
+}
+
+export async function deleteConversation(id: string): Promise<void> {
+  const res = await fetch(`${AI_HTTP}/conversations/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`Failed to delete conversation: ${res.status}`);
+}
+
 // ─── Terminal ────────────────────────────────────────
 
 export async function terminalCreate(shell?: string): Promise<{ id: string; pid: number }> {
@@ -514,4 +562,36 @@ export async function searchInFiles(params: {
   caseSensitive?: boolean;
 }): Promise<Array<{ file: string; line: number; column: number; text: string }>> {
   return invoke("search_files", { params });
+}
+
+// ─── RAG (Retrieval Augmented Generation) ───────────
+
+const RAG_URL = "http://127.0.0.1:11435";
+
+export interface RAGResult {
+  file: string;
+  start_line: number;
+  end_line: number;
+  content: string;
+  language: string;
+  score: number;
+}
+
+export async function ragSearch(query: string, topK: number = 10): Promise<{ results: RAGResult[]; count: number }> {
+  const params = new URLSearchParams({ q: query, top_k: String(topK) });
+  const res = await fetch(`${RAG_URL}/rag/search?${params}`);
+  if (!res.ok) throw new Error(`RAG search failed: ${res.status}`);
+  return res.json();
+}
+
+export async function ragRebuild(): Promise<{ chunks: number; files: number; languages: string[] }> {
+  const res = await fetch(`${RAG_URL}/rag/rebuild`, { method: "POST" });
+  if (!res.ok) throw new Error(`RAG rebuild failed: ${res.status}`);
+  return res.json();
+}
+
+export async function ragStats(): Promise<{ chunks: number; files: number; languages: string[] }> {
+  const res = await fetch(`${RAG_URL}/rag/stats`);
+  if (!res.ok) throw new Error(`RAG stats failed: ${res.status}`);
+  return res.json();
 }

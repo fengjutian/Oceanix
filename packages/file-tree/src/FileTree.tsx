@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { ChevronDown, ChevronRight, File, Folder, FolderOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, File, FileCode2, FileJson, FileText, FileImage, FileSpreadsheet, FileTerminal, FileLock, FileType2, Folder, FolderOpen } from "lucide-react";
 import type { FileNode, FileTreeProps } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -27,6 +27,76 @@ const TREE = {
   indentWidth: 16,
   fontSize: 13,
 };
+
+// ---------------------------------------------------------------------------
+// File-type → icon mapping (extensions without dot, lowercase)
+// ---------------------------------------------------------------------------
+
+import type { LucideIcon } from "lucide-react";
+
+/** Map a file extension (or filename) to a Lucide icon. */
+function fileIcon(extension: string | undefined, fileName: string): LucideIcon {
+  // Special filenames (no extension or dotfile)
+  const specialFiles: Record<string, LucideIcon> = {
+    "dockerfile": FileTerminal,
+    "makefile": FileTerminal,
+    "license": FileText,
+    "readme.md": FileText,
+    ".gitignore": FileLock,
+    ".env": FileLock,
+    ".env.local": FileLock,
+    "package-lock.json": FileLock,
+    "pnpm-lock.yaml": FileLock,
+    "yarn.lock": FileLock,
+    "cargo.lock": FileLock,
+  };
+  const key = fileName.toLowerCase();
+  if (specialFiles[key]) return specialFiles[key];
+
+  if (!extension) return File;
+
+  // Code files
+  const codeExts = new Set([
+    "ts", "tsx", "js", "jsx", "mjs", "cjs", "rs", "go", "py", "java",
+    "c", "cpp", "h", "hpp", "cs", "rb", "swift", "kt", "kts", "scala",
+    "dart", "ex", "exs", "elm", "fs", "fsx", "hs", "lhs", "lua", "nim",
+    "php", "pl", "pm", "r", "sol", "v", "zig",
+  ]);
+  if (codeExts.has(extension)) return FileCode2;
+
+  // JSON / data files
+  const dataExts = new Set(["json", "yaml", "yml", "toml", "xml", "graphql", "gql"]);
+  if (dataExts.has(extension)) return FileJson;
+
+  // Styles
+  const styleExts = new Set(["css", "scss", "less", "sass", "styl"]);
+  if (styleExts.has(extension)) return FileType2;
+
+  // Templates / markup
+  const markupExts = new Set(["html", "htm", "vue", "svelte", "astro", "jinja", "jinja2", "hbs", "ejs", "pug", "jade"]);
+  if (markupExts.has(extension)) return FileType2;
+
+  // Docs / text
+  const docExts = new Set(["md", "mdx", "txt", "log", "rst", "tex", "wiki"]);
+  if (docExts.has(extension)) return FileText;
+
+  // Images
+  const imgExts = new Set(["png", "jpg", "jpeg", "gif", "svg", "ico", "webp", "bmp", "tiff", "avif"]);
+  if (imgExts.has(extension)) return FileImage;
+
+  // Spreadsheets / data
+  const sheetExts = new Set(["csv", "tsv", "xls", "xlsx", "ods"]);
+  if (sheetExts.has(extension)) return FileSpreadsheet;
+
+  // Shell scripts
+  const shellExts = new Set(["sh", "bash", "zsh", "fish", "ps1", "psm1", "psd1"]);
+  if (shellExts.has(extension)) return FileTerminal;
+
+  // SQL
+  if (extension === "sql") return FileCode2;
+
+  return File;
+}
 
 const styles = {
   container: {
@@ -178,8 +248,9 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(
       color: gitColor(node.gitStatus),
     };
 
-    // File icon: File ; directory: FolderOpen (expanded) / Folder (collapsed)
-    const icon = isDir ? (expanded ? <FolderOpen size={16} /> : <Folder size={16} />) : <File size={16} />;
+    // File icon: extension-based for files, folder with open/closed state
+    const IconComp = isDir ? (expanded ? FolderOpen : Folder) : fileIcon(node.extension, node.name);
+    const icon = <IconComp size={16} />;
 
     return (
       <>

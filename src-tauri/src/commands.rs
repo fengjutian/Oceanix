@@ -99,7 +99,8 @@ pub fn settings_load() -> Result<serde_json::Value, String> {
             "wordWrap": "off",
             "minimap": true,
             "autoSave": "off",
-            "autoSaveDelay": 1000
+            "autoSaveDelay": 1000,
+            "aiModel": "deepseek-v4-pro"
         }))
     }
 }

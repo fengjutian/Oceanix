@@ -121,6 +121,7 @@ export interface MenuActions {
   onAddCursorAbove: () => void;
   onAddCursorBelow: () => void;
   onSelectAllOccurrences: () => void;
+  onAskOceanix: () => void;
   onQuickOpen: () => void;
   onGoToLine: () => void;
   onGoToSymbol: () => void;
@@ -187,6 +188,8 @@ export function buildMenus(actions: MenuActions, t: (key: string) => string): Me
         { label: t("menu.selection.addCursorBelow"), shortcut: "Ctrl+Alt+Down", action: actions.onAddCursorBelow },
         { separator: true },
         { label: t("menu.selection.selectAllOccurrences"), shortcut: "Ctrl+Shift+L", action: actions.onSelectAllOccurrences },
+        { separator: true },
+        { label: t("menu.selection.askOceanix"), shortcut: "Ctrl+Shift+I", action: actions.onAskOceanix },
       ],
     },
     {

@@ -3,6 +3,8 @@ export interface FileNode {
   path: string;
   type: "file" | "directory";
   children?: FileNode[];
+  /** File extension (lowercase, without dot), e.g. "ts", "json" */
+  extension?: string;
   /** Git status indicator */
   gitStatus?: "modified" | "added" | "deleted" | "untracked" | "ignored";
 }

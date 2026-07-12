@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { loadSettings, saveSettings, type EditorSettings } from "../services/api";
 import { DARK_THEME, LIGHT_THEME, applyTheme } from "@oceanix/theme";
 import { Search } from "lucide-react";
+import { useLocale } from "../i18n/LocaleContext";
 
 interface SettingsPanelProps {
   onClose?: () => void;
@@ -20,41 +21,54 @@ interface SettingDef {
   step?: number;
 }
 
-const SETTING_GROUPS: Record<string, SettingDef[]> = {
-  "Appearance": [
-    { key: "theme", label: "Color Theme", description: "Specifies the color theme used in the editor.", type: "select", options: [
-      { value: "vs-dark", label: "Dark" }, { value: "vs-light", label: "Light" },
-    ]},
-    { key: "fontSize", label: "Font Size", description: "Controls the font size in pixels.", type: "number", min: 10, max: 32 },
-    { key: "fontFamily", label: "Font Family", description: "Controls the font family.", type: "text" },
-    { key: "minimap", label: "Minimap", description: "Controls whether the minimap is shown.", type: "checkbox" },
-  ],
-  "Editor": [
-    { key: "tabSize", label: "Tab Size", description: "The number of spaces a tab is equal to.", type: "select", options: [
-      { value: 1, label: "1" }, { value: 2, label: "2" }, { value: 4, label: "4" }, { value: 8, label: "8" },
-    ]},
-    { key: "insertSpaces", label: "Insert Spaces", description: "Insert spaces when pressing Tab.", type: "checkbox" },
-    { key: "wordWrap", label: "Word Wrap", description: "Controls how lines should wrap.", type: "select", options: [
-      { value: "off", label: "Off" }, { value: "on", label: "On" }, { value: "wordWrapColumn", label: "Column" },
-    ]},
-    { key: "autoSave", label: "Auto Save", description: "Controls auto save of dirty editors.", type: "select", options: [
-      { value: "off", label: "Off" }, { value: "afterDelay", label: "After Delay" }, { value: "onFocusChange", label: "On Focus Change" },
-    ]},
-    { key: "autoSaveDelay", label: "Auto Save Delay", description: "Controls the delay in ms after which auto save runs.", type: "number", min: 500, max: 10000, step: 500 },
-  ],
-};
-
-function flattenSettings(): SettingDef[] {
-  return Object.values(SETTING_GROUPS).flat();
+function getSettingGroups(t: (key: string) => string): Record<string, SettingDef[]> {
+  return {
+    "Appearance": [
+      { key: "theme", label: t("settings.label.theme"), description: t("settings.desc.theme"), type: "select", options: [
+        { value: "vs-dark", label: t("settings.option.dark") }, { value: "vs-light", label: t("settings.option.light") },
+      ]},
+      { key: "fontSize", label: t("settings.label.fontSize"), description: t("settings.desc.fontSize"), type: "number", min: 10, max: 32 },
+      { key: "fontFamily", label: t("settings.label.fontFamily"), description: t("settings.desc.fontFamily"), type: "text" },
+      { key: "minimap", label: t("settings.label.minimap"), description: t("settings.desc.minimap"), type: "checkbox" },
+    ],
+    "Editor": [
+      { key: "tabSize", label: t("settings.label.tabSize"), description: t("settings.desc.tabSize"), type: "select", options: [
+        { value: 1, label: "1" }, { value: 2, label: "2" }, { value: 4, label: "4" }, { value: 8, label: "8" },
+      ]},
+      { key: "insertSpaces", label: t("settings.label.insertSpaces"), description: t("settings.desc.insertSpaces"), type: "checkbox" },
+      { key: "wordWrap", label: t("settings.label.wordWrap"), description: t("settings.desc.wordWrap"), type: "select", options: [
+        { value: "off", label: t("settings.option.off") }, { value: "on", label: t("settings.option.on") }, { value: "wordWrapColumn", label: t("settings.option.wordWrapColumn") },
+      ]},
+      { key: "autoSave", label: t("settings.label.autoSave"), description: t("settings.desc.autoSave"), type: "select", options: [
+        { value: "off", label: t("settings.option.off") }, { value: "afterDelay", label: t("settings.option.afterDelay") }, { value: "onFocusChange", label: t("settings.option.onFocusChange") },
+      ]},
+      { key: "autoSaveDelay", label: t("settings.label.autoSaveDelay"), description: t("settings.desc.autoSaveDelay"), type: "number", min: 500, max: 10000, step: 500 },
+    ],
+    "AI": [
+      { key: "aiModel", label: t("settings.label.aiModel"), description: t("settings.desc.aiModel"), type: "select", options: [
+        { value: "deepseek-v4-pro", label: "deepseek-v4-pro" },
+        { value: "deepseek-v4-flash", label: "deepseek-v4-flash" },
+      ]},
+    ],
+  };
 }
+
+const GROUP_I18N_KEYS: Record<string, string> = {
+  "Appearance": "settings.group.appearance",
+  "Editor": "settings.group.editor",
+  "AI": "settings.group.ai",
+};
 
 // ── Component ──────────────────────────────────────────
 
 export default function SettingsPanel({ onClose }: SettingsPanelProps) {
+  const { t } = useLocale();
   const [settings, setSettings] = useState<EditorSettings>({} as EditorSettings);
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState("");
   const [activeGroup, setActiveGroup] = useState("Appearance");
+
+  const settingGroups = useMemo(() => getSettingGroups(t as (key: string) => string), [t]);
 
   useEffect(() => {
     loadSettings().then((s) => { setSettings(s); setLoaded(true); }).catch(() => setLoaded(true));
@@ -69,12 +83,12 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
     }
   };
 
-  const allSettings = flattenSettings();
+  const allSettings = useMemo(() => Object.values(settingGroups).flat(), [settingGroups]);
   const filtered = search.trim()
     ? allSettings.filter((s) => s.label.toLowerCase().includes(search.toLowerCase()) || s.key.toLowerCase().includes(search.toLowerCase()))
-    : SETTING_GROUPS[activeGroup] || [];
+    : settingGroups[activeGroup] || [];
 
-  if (!loaded) return <div style={{ padding: 12, color: "var(--text-secondary)" }}>Loading...</div>;
+  if (!loaded) return <div style={{ padding: 12, color: "var(--text-secondary)" }}>{t("sidebar.loading")}</div>;
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg-primary)" }}>
@@ -84,7 +98,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
         padding: "8px 16px", borderBottom: "1px solid var(--border-color)",
         fontSize: 13, fontWeight: 600, color: "var(--text-primary)",
       }}>
-        <span>Settings</span>
+        <span>{t("menu.view.settings")}</span>
         {onClose && (
           <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: 18 }}>×</button>
         )}
@@ -98,7 +112,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
             style={{
               flex: 1, background: "none", border: "none", color: "var(--text-primary)", fontSize: 13, outline: "none",
             }}
-            placeholder="Search settings..."
+            placeholder={t("settings.searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -113,7 +127,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
             width: 180, borderRight: "1px solid var(--border-color)",
             overflow: "auto", padding: "8px 0", flexShrink: 0,
           }}>
-            {Object.keys(SETTING_GROUPS).map((group) => (
+            {Object.keys(settingGroups).map((group) => (
               <div
                 key={group}
                 onClick={() => setActiveGroup(group)}
@@ -123,7 +137,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                   background: activeGroup === group ? "var(--bg-tertiary)" : "transparent",
                 }}
               >
-                {group}
+                {t(GROUP_I18N_KEYS[group])}
               </div>
             ))}
           </div>

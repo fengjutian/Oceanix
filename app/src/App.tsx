@@ -43,6 +43,7 @@ function App() {
   const [panelTab, setPanelTab] = useState<"terminal" | "problems" | "output">("terminal");
   const [showPalette, setShowPalette] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [selectionContext, setSelectionContext] = useState<{ code: string; file: string; language: string } | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [projectRoot, setProjectRootState] = useState(".");
   const [fileChoicePath, setFileChoicePath] = useState<string | null>(null);
@@ -464,6 +465,22 @@ function App() {
     onAddCursorAbove: () => editorRef.current?.trigger("keyboard", "editor.action.insertCursorAbove", null),
     onAddCursorBelow: () => editorRef.current?.trigger("keyboard", "editor.action.insertCursorBelow", null),
     onSelectAllOccurrences: () => editorRef.current?.trigger("keyboard", "editor.action.selectHighlights", null),
+    onAskOceanix: () => {
+      const ed = editorRef.current;
+      if (!ed) return;
+      const selection = ed.getSelection();
+      if (!selection || selection.isEmpty()) return;
+      const model = ed.getModel();
+      if (!model) return;
+      const code = model.getValueInRange(selection);
+      const file = activeTab?.path ?? "";
+      const language = activeTab?.language ?? "";
+      setSelectionContext({ code, file, language });
+      setSidebarView("ai");
+      setSidebarVisible(true);
+      // Clear after ChatPanel consumes it
+      setTimeout(() => setSelectionContext(null), 100);
+    },
     onQuickOpen: () => setShowPalette(true),
     onGoToLine: () => editorRef.current?.trigger("keyboard", "editor.action.gotoLine", null),
     onGoToSymbol: () => editorRef.current?.trigger("keyboard", "editor.action.gotoNextSymbolFromResult", null),
@@ -526,6 +543,11 @@ function App() {
                   onFileSelect={handleFileSelect}
                   projectRoot={projectRoot}
                   onFileTreeLoaded={handleFileTreeLoaded}
+                  selectionContext={selectionContext}
+                  editorContext={{
+                    openFiles: tabs.map((t) => t.path),
+                    activeFile: activeTab?.path ?? "",
+                  }}
                 />
               </Panel>
               <PanelResizeHandle className="resize-handle" />

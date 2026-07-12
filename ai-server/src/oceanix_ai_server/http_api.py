@@ -9,8 +9,8 @@ import sys
 import os
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, Request, Query, HTTPException
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
@@ -53,7 +53,10 @@ async def chat_stream(request: Request):
 
     logger.info(f"Chat stream: {len(messages)} messages")
 
-    provider = get_llm()
+    # Read optional model selection from request
+    model = body.get("model")
+
+    provider = get_llm(model=model) if model else get_llm()
     if not provider:
         async def _error():
             yield f"data: {json.dumps({'error': 'No LLM provider configured. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'})}\n\n"
@@ -99,6 +102,82 @@ async def chat_stream(request: Request):
             yield "data: [DONE]\n\n"
 
     return StreamingResponse(_stream(), media_type="text/event-stream")
+
+
+# ── RAG endpoints ───────────────────────────────────────
+
+@app.get("/rag/search")
+async def rag_search(q: str = Query(..., description="Search query"), top_k: int = Query(10, description="Number of results")):
+    """Search the RAG code index."""
+    from .rag import search_codebase
+    results = search_codebase(q, top_k=top_k)
+    return {"results": results, "count": len(results)}
+
+
+@app.post("/rag/rebuild")
+async def rag_rebuild():
+    """Rebuild the RAG code index from scratch."""
+    from .rag import rebuild_index, get_index
+    rebuild_index()
+    idx = get_index()
+    return idx.stats()
+
+
+@app.get("/rag/stats")
+async def rag_stats():
+    """Get RAG index statistics."""
+    from .rag import get_index
+    return get_index().stats()
+
+
+# ── Conversation history endpoints ──────────────────────
+
+@app.get("/conversations")
+async def list_conversations(limit: int = Query(20, description="Maximum conversations to return")):
+    """List saved conversations."""
+    from .memory import list_conversations as _list
+    import os
+    root = os.getcwd()
+    return {"conversations": _list(root, limit=limit)}
+
+
+@app.get("/conversations/{conv_id}")
+async def load_conversation(conv_id: str):
+    """Load a saved conversation by ID."""
+    from .memory import load_conversation as _load
+    import os
+    root = os.getcwd()
+    data = _load(root, conv_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"Conversation {conv_id} not found")
+    return data
+
+
+@app.post("/conversations")
+async def save_conversation(request: Request):
+    """Save a conversation. Body: {"id": str, "messages": [...]}"""
+    body = await request.json()
+    conv_id = body.get("id", "")
+    messages = body.get("messages", [])
+    if not conv_id:
+        raise HTTPException(status_code=400, detail="Missing 'id' field")
+    from .memory import save_conversation as _save
+    import os
+    root = os.getcwd()
+    path = _save(root, conv_id, messages)
+    return {"saved": path, "id": conv_id}
+
+
+@app.delete("/conversations/{conv_id}")
+async def delete_conversation(conv_id: str):
+    """Delete a saved conversation by ID."""
+    from .memory import delete_conversation as _delete
+    import os
+    root = os.getcwd()
+    ok = _delete(root, conv_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"Conversation {conv_id} not found")
+    return {"deleted": conv_id}
 
 
 # ── Health check ─────────────────────────────────────────

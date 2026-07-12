@@ -236,6 +236,18 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
         {/* Main editor */}
         <div style={{ flex: (showDiff || splitMode) ? 0.5 : 1, minWidth: 0, height: "100%" }}>
           {activeTab ? (
+            activeTab.language === "image" ? (
+              <div style={{
+                height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+                background: "var(--bg-primary)", overflow: "auto",
+              }}>
+                <img
+                  src={activeTab.content}
+                  alt={activeTab.label}
+                  style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+                />
+              </div>
+            ) : (
             <Editor
               height="100%"
               language={activeTab.language}
@@ -265,6 +277,7 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
                 cursorSmoothCaretAnimation: "on",
               }}
             />
+            )
           ) : (
             <WelcomePage />
           )}

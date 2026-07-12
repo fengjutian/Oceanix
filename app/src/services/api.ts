@@ -11,6 +11,11 @@ export async function readFile(path: string): Promise<string> {
   return invoke<string>("file_read", { path });
 }
 
+/** Read a file as base64-encoded string (for binary files like images) */
+export async function readFileBase64(path: string): Promise<string> {
+  return invoke<string>("file_read_base64", { path });
+}
+
 export async function writeFile(path: string, content: string): Promise<void> {
   return invoke("file_write", { path, content });
 }

@@ -25,6 +25,42 @@ pub fn file_read(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| format!("Read error: {e}"))
 }
 
+/// Read a file and return its contents as a base64-encoded string.
+/// Used for binary files such as images.
+#[tauri::command]
+pub fn file_read_base64(path: String) -> Result<String, String> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(&path).map_err(|e| format!("Open error: {e}"))?;
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf).map_err(|e| format!("Read error: {e}"))?;
+    Ok(base64_encode(&buf))
+}
+
+/// Simple base64 encoder (no external crate needed).
+fn base64_encode(bytes: &[u8]) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = String::new();
+    for chunk in bytes.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
+        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
+        let triple = (b0 << 16) | (b1 << 8) | b2;
+        result.push(CHARS[((triple >> 18) & 0x3F) as usize] as char);
+        result.push(CHARS[((triple >> 12) & 0x3F) as usize] as char);
+        if chunk.len() > 1 {
+            result.push(CHARS[((triple >> 6) & 0x3F) as usize] as char);
+        } else {
+            result.push('=');
+        }
+        if chunk.len() > 2 {
+            result.push(CHARS[(triple & 0x3F) as usize] as char);
+        } else {
+            result.push('=');
+        }
+    }
+    result
+}
+
 #[tauri::command]
 pub fn file_write(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| format!("Write error: {e}"))

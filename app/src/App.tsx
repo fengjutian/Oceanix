@@ -540,7 +540,6 @@ function App() {
                 <Sidebar
                   view={sidebarView}
                   onOpenFile={openTab}
-                  onFileSelect={handleFileSelect}
                   projectRoot={projectRoot}
                   onFileTreeLoaded={handleFileTreeLoaded}
                   selectionContext={selectionContext}

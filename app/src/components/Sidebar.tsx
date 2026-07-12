@@ -4,7 +4,7 @@ import GitPanel, { GitFileStatus, GitStashInfo, GitCommitInfo } from "./GitPanel
 import ChatPanel from "./ChatPanel";
 import { useState, useCallback, useEffect } from "react";
 import {
-  readDir, readFile, gitStatus, gitBranchName, gitCommit,
+  readDir, readFile, readFileBase64, gitStatus, gitBranchName, gitCommit,
   gitStage, gitUnstage, gitBranches, gitSwitchBranch,
   gitPush, gitPull, gitFetch, gitCreateBranch, gitDiscard,
   gitStashSave, gitStashList, gitStashPop, gitStashApply, gitStashDrop,
@@ -384,7 +384,37 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
 
     if (onOpenFile) {
       const label = path.split("/").pop() || path;
-      const ext = label.split(".").pop() || "";
+      const ext = label.split(".").pop()?.toLowerCase() || "";
+
+      // Image files: open as preview tab using base64 data URI
+      const IMG_EXTS = new Set(["png", "jpg", "jpeg", "gif", "svg", "ico", "webp", "bmp", "tiff", "avif"]);
+      if (IMG_EXTS.has(ext)) {
+        const mimeMap: Record<string, string> = {
+          png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+          gif: "image/gif", svg: "image/svg+xml", ico: "image/x-icon",
+          webp: "image/webp", bmp: "image/bmp", tiff: "image/tiff",
+          avif: "image/avif",
+        };
+        try {
+          const b64 = await readFileBase64(path);
+          onOpenFile({
+            id: path, path, label,
+            language: "image",
+            content: `data:${mimeMap[ext] || "application/octet-stream"};base64,${b64}`,
+            dirty: false,
+          });
+        } catch {
+          // Fallback: still open as image tab, the broken-image icon will show
+          onOpenFile({
+            id: path, path, label,
+            language: "image",
+            content: "",
+            dirty: false,
+          });
+        }
+        return;
+      }
+
       const langMap: Record<string, string> = {
         ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
         rs: "rust", json: "json", md: "markdown", css: "css", html: "html",

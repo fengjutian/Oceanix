@@ -1039,8 +1039,14 @@ pub struct LspSymbol {
 fn flatten_symbols(symbols: Vec<oceanix_lsp::SymbolInfo>) -> Vec<LspSymbol> {
     symbols.into_iter().map(|s| {
         let children = flatten_symbols(s.children.unwrap_or_default());
-        let line = s.location.as_ref().map(|l| l.range.start.line).unwrap_or(0);
-        let column = s.location.as_ref().map(|l| l.range.start.character).unwrap_or(0);
+        let line = s.range.as_ref().map(|r| r.start.line)
+            .or_else(|| s.selection_range.as_ref().map(|r| r.start.line))
+            .or_else(|| s.location.as_ref().map(|l| l.range.start.line))
+            .unwrap_or(0);
+        let column = s.range.as_ref().map(|r| r.start.character)
+            .or_else(|| s.selection_range.as_ref().map(|r| r.start.character))
+            .or_else(|| s.location.as_ref().map(|l| l.range.start.character))
+            .unwrap_or(0);
         LspSymbol { name: s.name, kind: s.kind, line, column, children }
     }).collect()
 }

@@ -96,6 +96,10 @@ pub struct SymbolInfo {
     pub name: String,
     pub kind: u32,
     #[serde(default)]
+    pub range: Option<Range>,
+    #[serde(default)]
+    pub selection_range: Option<Range>,
+    #[serde(default)]
     pub location: Option<Location>,
     #[serde(default)]
     pub children: Option<Vec<SymbolInfo>>,

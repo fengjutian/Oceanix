@@ -3,7 +3,7 @@ import { EditorTab } from "./EditorTabs";
 import GitPanel, { GitFileStatus, GitStashInfo, GitCommitInfo } from "./GitPanel";
 import ChatPanel from "./ChatPanel";
 import OutlinePanel from "./OutlinePanel";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   readDir, readFile, readFileBase64, gitStatus, gitBranchName, gitCommit,
   gitStage, gitUnstage, gitBranches, gitSwitchBranch,
@@ -113,6 +113,7 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
 
   // Context menu state
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null);
+  const ctxMenuRef = useRef<FileNode | null>(null); // survives setCtxMenu(null)
   const [ctxNewName, setCtxNewName] = useState("");
   const [ctxShowRename, setCtxShowRename] = useState(false);
   const [ctxShowNewFile, setCtxShowNewFile] = useState(false);
@@ -556,16 +557,19 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
               }}>
                 {ctxMenu.node.type === "directory" && (
                   <>
-                    <div style={ctxItemStyle} onClick={async () => {
+                    <div style={ctxItemStyle} onClick={() => {
+                      ctxMenuRef.current = ctxMenu.node;
                       setCtxShowNewFile(true); setCtxMenu(null);
                     }}>📄 New File</div>
-                    <div style={ctxItemStyle} onClick={async () => {
+                    <div style={ctxItemStyle} onClick={() => {
+                      ctxMenuRef.current = ctxMenu.node;
                       setCtxShowNewFolder(true); setCtxMenu(null);
                     }}>📁 New Folder</div>
                     <div style={ctxSepStyle} />
                   </>
                 )}
                 <div style={ctxItemStyle} onClick={() => {
+                  ctxMenuRef.current = ctxMenu.node;
                   setCtxNewName(ctxMenu.node.name); setCtxShowRename(true); setCtxMenu(null);
                 }}>✏️ Rename</div>
                 <div style={{ ...ctxItemStyle, color: "#f44747" }} onClick={async () => {
@@ -589,8 +593,9 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
                 onChange={(e) => setCtxNewName(e.target.value)}
                 onKeyDown={async (e) => {
                   if (e.key === "Enter") {
-                    const oldPath = ctxMenu?.node.path;
-                    if (oldPath && ctxNewName && ctxNewName !== ctxMenu?.node.name) {
+                    const oldPath = ctxMenuRef.current?.path;
+                    const oldName = ctxMenuRef.current?.name;
+                    if (oldPath && ctxNewName && ctxNewName !== oldName) {
                       const dir = oldPath.replace(/[/\\][^/\\]*$/, "");
                       try { await renameFile(oldPath, `${dir}/${ctxNewName}`); refreshTree(); } catch {}
                     }
@@ -611,8 +616,8 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
                 onKeyDown={async (e) => {
                   if (e.key === "Enter") {
                     const name = (e.target as HTMLInputElement).value.trim();
-                    if (name && ctxMenu?.node.path) {
-                      try { await createFile(`${ctxMenu.node.path}/${name}`); refreshTree(); } catch {}
+                    if (name && ctxMenuRef.current?.path) {
+                      try { await createFile(`${ctxMenuRef.current.path}/${name}`); refreshTree(); } catch {}
                     }
                     setCtxShowNewFile(false);
                   } else if (e.key === "Escape") setCtxShowNewFile(false);
@@ -631,8 +636,8 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
                 onKeyDown={async (e) => {
                   if (e.key === "Enter") {
                     const name = (e.target as HTMLInputElement).value.trim();
-                    if (name && ctxMenu?.node.path) {
-                      try { await createDir(`${ctxMenu.node.path}/${name}`); refreshTree(); } catch {}
+                    if (name && ctxMenuRef.current?.path) {
+                      try { await createDir(`${ctxMenuRef.current.path}/${name}`); refreshTree(); } catch {}
                     }
                     setCtxShowNewFolder(false);
                   } else if (e.key === "Escape") setCtxShowNewFolder(false);

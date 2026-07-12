@@ -17,7 +17,7 @@ import MenuBar, { buildMenus, MenuActions } from "./components/MenuBar";
 import { useLocale } from "./i18n/LocaleContext";
 import { KeybindingRegistry, KeyBinding } from "@oceanix/keybinding";
 import { applyTheme, DARK_THEME, LIGHT_THEME } from "@oceanix/theme";
-import { loadSession, saveSession, SessionState, getProjectRoot, writeFile, setProjectRoot, openFolderDialog, openFileDialog, readFile, readFileBase64, openNewWindow, loadSettings, gitBranchName, gitDiff, gitShow, taskRun } from "./services/api";
+import { loadSession, saveSession, SessionState, getProjectRoot, writeFile, setProjectRoot, openFolderDialog, openFileDialog, readFile, readFileBase64, openNewWindow, loadSettings, gitBranchName, gitShow, taskRun } from "./services/api";
 import type { EditorSettings } from "./services/api";
 import { registerCommand as registerGlobalCommand } from "./services/commandBus";
 import { GlassDialog, GlassBtn } from "@oceanix/glass";
@@ -101,7 +101,7 @@ function App() {
       return [...prev, tab];
     });
     setActiveTabId(tab.id);
-  }, [splitDirection]);
+  }, []); // splitDirection not used
 
   // ─── File open choice dialog ─────────────────────
   const handleFileSelect = useCallback((path: string) => {
@@ -530,7 +530,7 @@ function App() {
       };
       saveSession(session);
     };
-  }, [tabs, activeTabId, sidebarView, sidebarVisible, panelVisible]);
+  }, [tabs, activeTabId, sidebarView, sidebarVisible, panelVisible, cursorLine, cursorColumn]);
 
   // ─── Active file info ───────────────────────────────
   const activeTab = tabs.find((t) => t.id === activeTabId);

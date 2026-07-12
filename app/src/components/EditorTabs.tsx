@@ -27,19 +27,17 @@ function renderMarkdown(md: string): string {
     return `<pre><code${cls}>${code.trim()}</code></pre>`;
   });
 
-  // Inline code
-  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  // Bold / italic — run BEFORE inline code to avoid corrupting <code> content
+  html = html.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
 
-  // Headers
+  // Inline code — now runs after bold/italic so ** inside code stays literal
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
   html = html.replace(/^#### (.+)$/gm, "<h4>$1</h4>");
   html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
   html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
   html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
-
-  // Bold / italic
-  html = html.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
-  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
 
   // Unordered lists
   html = html.replace(/^[-*] (.+)$/gm, "<li>$1</li>");
@@ -122,6 +120,10 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
   const bpDecorationsRef = useRef<string[]>([]);
 
   const lspDisposablesRef = useRef<Array<{ dispose: () => void }>>([]);
+  const cursorChangeRef = useRef(onCursorChange);
+  cursorChangeRef.current = onCursorChange;
+  const settingsRef = useRef(editorSettings);
+  settingsRef.current = editorSettings;
   const handleEditorMount: OnMount = useCallback(
     (editorInstance: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
       monacoRef.current = monaco;
@@ -129,18 +131,19 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
 
       // Track cursor position for status bar
       editorInstance.onDidChangeCursorPosition((e) => {
-        onCursorChange?.(e.position.lineNumber, e.position.column);
+        cursorChangeRef.current?.(e.position.lineNumber, e.position.column);
       });
 
       // Apply editor settings
-      if (editorSettings) {
+      const s = settingsRef.current;
+      if (s) {
         editorInstance.updateOptions({
-          fontSize: editorSettings.fontSize,
-          fontFamily: editorSettings.fontFamily,
-          tabSize: editorSettings.tabSize,
-          insertSpaces: editorSettings.insertSpaces,
-          wordWrap: editorSettings.wordWrap,
-          minimap: { enabled: editorSettings.minimap },
+          fontSize: s.fontSize,
+          fontFamily: s.fontFamily,
+          tabSize: s.tabSize,
+          insertSpaces: s.insertSpaces,
+          wordWrap: s.wordWrap,
+          minimap: { enabled: s.minimap },
           glyphMargin: true,
         });
       }

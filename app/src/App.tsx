@@ -21,6 +21,7 @@ import { applyTheme, DARK_THEME, LIGHT_THEME } from "@oceanix/theme";
 import { loadSession, saveSession, SessionState, getProjectRoot, writeFile, setProjectRoot, openFolderDialog, openFileDialog, readFile, readFileBase64, openNewWindow, loadSettings, gitBranchName, gitShow, taskRun } from "./services/api";
 import type { EditorSettings } from "./services/api";
 import { registerCommand as registerGlobalCommand } from "./services/commandBus";
+import { useAgentOpener } from "./services/agentOpener";
 import { GlassDialog, GlassBtn } from "@oceanix/glass";
 
 const DEFAULT_BINDINGS: KeyBinding[] = [
@@ -49,8 +50,7 @@ function App() {
   const [panelTab, setPanelTab] = useState<"terminal" | "problems" | "output" | "debug">("terminal");
   const [showPalette, setShowPalette] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showAgentDialog, setShowAgentDialog] = useState(false);
-  const [agentInitialTask, setAgentInitialTask] = useState<string | undefined>(undefined);
+  const agentOpener = useAgentOpener();
   const [selectionContext, setSelectionContext] = useState<{ code: string; file: string; language: string } | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [projectRoot, setProjectRootState] = useState(".");
@@ -642,7 +642,7 @@ function App() {
     <div className="app-container">
       <MenuBar menus={menus} />
       <div className="app-main">
-        <ActivityBar activeView={sidebarView} onViewChange={(v) => { setSidebarView(v); setSidebarVisible(true); }} onOpenSettings={() => setShowSettings(true)} onOpenAgent={() => { setAgentInitialTask(undefined); setShowAgentDialog(true); }} />
+        <ActivityBar activeView={sidebarView} onViewChange={(v) => { setSidebarView(v); setSidebarVisible(true); }} onOpenSettings={() => setShowSettings(true)} onOpenAgent={() => agentOpener.open()} />
         <PanelGroup direction="horizontal">
           {sidebarVisible && (
             <>
@@ -658,10 +658,7 @@ function App() {
                     activeFile: activeTab?.path ?? "",
                     activeLanguage: activeTab?.language,
                   }}
-                  onOpenInAgent={(path) => {
-                    setAgentInitialTask(`Analyze: ${path}`);
-                    setShowAgentDialog(true);
-                  }}
+                  onOpenInAgent={(path) => agentOpener.open(`Analyze: ${path}`)}
                 />
               </Panel>
               <PanelResizeHandle className="resize-handle" />
@@ -800,11 +797,11 @@ function App() {
         </GlassDialog>
       )}
 
-      {showAgentDialog && (
+      {agentOpener.isOpen && (
         <AgentDialog
-          open={showAgentDialog}
-          onClose={() => setShowAgentDialog(false)}
-          initialTask={agentInitialTask}
+          open={agentOpener.isOpen}
+          onClose={agentOpener.close}
+          initialTask={agentOpener.initialTask}
         />
       )}
 

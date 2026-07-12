@@ -15,7 +15,7 @@ import MenuBar, { buildMenus, MenuActions } from "./components/MenuBar";
 import { useLocale } from "./i18n/LocaleContext";
 import { KeybindingRegistry, KeyBinding } from "@oceanix/keybinding";
 import { applyTheme, DARK_THEME, LIGHT_THEME } from "@oceanix/theme";
-import { loadSession, saveSession, SessionState, getProjectRoot, writeFile, setProjectRoot, openFolderDialog, readFile } from "./services/api";
+import { loadSession, saveSession, SessionState, getProjectRoot, writeFile, setProjectRoot, openFolderDialog, openFileDialog, readFile, openNewWindow } from "./services/api";
 import { registerCommand as registerGlobalCommand } from "./services/commandBus";
 import { GlassDialog, GlassBtn } from "@oceanix/glass";
 
@@ -46,6 +46,7 @@ function App() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [projectRoot, setProjectRootState] = useState(".");
   const [fileChoicePath, setFileChoicePath] = useState<string | null>(null);
+  const [folderChoicePath, setFolderChoicePath] = useState<string | null>(null);
   const [flatFiles, setFlatFiles] = useState<Array<{ path: string; name: string }>>([]);
 
   const handleFileTreeLoaded = useCallback((files: Array<{ path: string; name: string }>) => {
@@ -127,6 +128,22 @@ function App() {
     try { content = await readFile(path); } catch { content = `// Could not read: ${path}`; }
     openTab({ id: path, path, label, language: langMap[ext] || "plaintext", content, dirty: false }, "split");
   }, [fileChoicePath, openTab]);
+
+  // ─── Folder open choice handlers ─────────────────
+  const handleOpenFolderLocal = useCallback(() => {
+    if (!folderChoicePath) return;
+    const folder = folderChoicePath;
+    setFolderChoicePath(null);
+    setProjectRootState(folder);
+    setProjectRoot(folder).catch(() => {});
+  }, [folderChoicePath]);
+
+  const handleOpenFolderInNewPage = useCallback(() => {
+    if (!folderChoicePath) return;
+    const folder = folderChoicePath;
+    setFolderChoicePath(null);
+    openNewWindow(folder).catch(() => {});
+  }, [folderChoicePath]);
 
   const closeTab = useCallback((id: string) => {
     setTabs((prev) => {
@@ -333,10 +350,7 @@ function App() {
     // file.openFolder needs a direct handler — it's not in quickOpenCommands
     const openFolderHandler = () => {
       openFolderDialog().then((folder) => {
-        if (folder) {
-          setProjectRootState(folder);
-          setProjectRoot(folder).catch(() => {});
-        }
+        if (folder) setFolderChoicePath(folder);
       });
     };
     registry.registerCommand("file.openFolder", openFolderHandler);
@@ -352,6 +366,11 @@ function App() {
     // (which are unreliable in Tauri WebView2).
     registerGlobalCommand("file.new", () => handler("file.new"));
     registerGlobalCommand("file.openFolder", openFolderHandler);
+    registerGlobalCommand("file.openFile", () => {
+      openFileDialog().then((file) => {
+        if (file) setFileChoicePath(file);
+      });
+    });
     registerGlobalCommand("panel.toggle", () => handler("panel.toggle"));
     registerGlobalCommand("palette.show", () => handler("palette.show"));
     registerGlobalCommand("theme.toggle", () => handler("theme.toggle"));
@@ -416,10 +435,7 @@ function App() {
     onOpenFile: () => setShowPalette(true),
     onOpenFolder: () => {
       openFolderDialog().then((folder) => {
-        if (folder) {
-          setProjectRootState(folder);
-          setProjectRoot(folder).catch(() => {});
-        }
+        if (folder) setFolderChoicePath(folder);
       });
     },
     onSave: () => {
@@ -638,6 +654,34 @@ function App() {
                 Open in New Page
               </GlassBtn>
               <GlassBtn accent onClick={handleOpenLocal}>
+                Open Locally
+              </GlassBtn>
+            </div>
+          </div>
+        </GlassDialog>
+      )}
+
+      {/* Folder open choice dialog */}
+      {folderChoicePath && (
+        <GlassDialog open={!!folderChoicePath} onClose={() => setFolderChoicePath(null)} dialogClassName={undefined}>
+          <div style={{ width: 400, padding: "8px 0" }}>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)" }}>
+              Open Folder
+            </div>
+            <div style={{
+              fontSize: 12, color: "var(--text-secondary)", marginBottom: 20,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {folderChoicePath}
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <GlassBtn onClick={() => setFolderChoicePath(null)}>
+                Cancel
+              </GlassBtn>
+              <GlassBtn onClick={handleOpenFolderInNewPage}>
+                Open in New Page
+              </GlassBtn>
+              <GlassBtn accent onClick={handleOpenFolderLocal}>
                 Open Locally
               </GlassBtn>
             </div>

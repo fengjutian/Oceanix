@@ -1,9 +1,16 @@
 import { FileTree, FileNode } from "@oceanix/file-tree";
 import { EditorTab } from "./EditorTabs";
-import GitPanel, { GitFileStatus } from "./GitPanel";
+import GitPanel, { GitFileStatus, GitStashInfo, GitCommitInfo } from "./GitPanel";
 import ChatPanel from "./ChatPanel";
 import { useState, useCallback, useEffect } from "react";
-import { readDir, readFile, gitStatus, gitBranchName, gitCommit, gitStage, gitUnstage, gitBranches, gitSwitchBranch, searchInFiles } from "../services/api";
+import {
+  readDir, readFile, gitStatus, gitBranchName, gitCommit,
+  gitStage, gitUnstage, gitBranches, gitSwitchBranch,
+  gitPush, gitPull, gitFetch, gitCreateBranch, gitDiscard,
+  gitStashSave, gitStashList, gitStashPop, gitStashApply, gitStashDrop,
+  gitLog,
+  searchInFiles,
+} from "../services/api";
 import { useLocale } from "../i18n/LocaleContext";
 
 interface SidebarProps {
@@ -85,6 +92,8 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
   const [gitBranchesList, setGitBranchesList] = useState<Array<{ name: string; isHead: boolean }>>([]);
   const [gitLoading, setGitLoading] = useState(false);
   const [gitError, setGitError] = useState<string | null>(null);
+  const [gitStashes, setGitStashes] = useState<GitStashInfo[]>([]);
+  const [gitLogEntries, setGitLogEntries] = useState<GitCommitInfo[]>([]);
 
   // Reset file tree when project root changes
   useEffect(() => {
@@ -136,9 +145,10 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
         gitBranchName().catch(() => "main"),
         gitBranches().catch(() => [] as Array<{ name: string; isHead: boolean }>),
       ]).then(([files, branch, brList]) => {
-        setGitFiles(files.map((f: { path: string; status: string }) => ({
+        setGitFiles(files.map((f: { path: string; status: string; staged: boolean }) => ({
           path: f.path,
           status: f.status as GitFileStatus["status"],
+          staged: f.staged,
         })));
         setGitBranch(branch);
         setGitBranchesList(brList);
@@ -156,9 +166,10 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
         gitBranchName().catch(() => "main"),
         gitBranches().catch(() => [] as Array<{ name: string; isHead: boolean }>),
       ]);
-      setGitFiles(files.map((f: { path: string; status: string }) => ({
+      setGitFiles(files.map((f: { path: string; status: string; staged: boolean }) => ({
         path: f.path,
         status: f.status as GitFileStatus["status"],
+        staged: f.staged,
       })));
       setGitBranch(branch);
       setGitBranchesList(brList);
@@ -175,9 +186,10 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
         gitBranchName().catch(() => "main"),
         gitBranches().catch(() => [] as Array<{ name: string; isHead: boolean }>),
       ]);
-      setGitFiles(files.map((f: { path: string; status: string }) => ({
+      setGitFiles(files.map((f: { path: string; status: string; staged: boolean }) => ({
         path: f.path,
         status: f.status as GitFileStatus["status"],
+        staged: f.staged,
       })));
       setGitBranch(branch);
       setGitBranchesList(brList);
@@ -196,6 +208,143 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
     });
     return () => { unlisten?.(); };
   }, [handleGitRefresh]);
+
+  // ─── New Git handlers ────────────────────────────
+
+  const handleGitPush = useCallback(async () => {
+    try {
+      setGitLoading(true);
+      await gitPush(gitBranch);
+      handleGitRefresh();
+    } catch (err) {
+      setGitError(`Push failed: ${err}`);
+    } finally {
+      setGitLoading(false);
+    }
+  }, [gitBranch, handleGitRefresh]);
+
+  const handleGitPull = useCallback(async () => {
+    try {
+      setGitLoading(true);
+      await gitPull(gitBranch);
+      handleGitRefresh();
+    } catch (err) {
+      setGitError(`Pull failed: ${err}`);
+    } finally {
+      setGitLoading(false);
+    }
+  }, [gitBranch, handleGitRefresh]);
+
+  const handleGitFetch = useCallback(async () => {
+    try {
+      setGitLoading(true);
+      await gitFetch();
+      handleGitRefresh();
+    } catch (err) {
+      setGitError(`Fetch failed: ${err}`);
+    } finally {
+      setGitLoading(false);
+    }
+  }, [handleGitRefresh]);
+
+  const handleGitCreateBranch = useCallback(async (name: string) => {
+    try {
+      await gitCreateBranch(name);
+      await gitSwitchBranch(name);
+      handleGitRefresh();
+    } catch (err) {
+      setGitError(`Create branch failed: ${err}`);
+    }
+  }, [handleGitRefresh]);
+
+  const handleGitDiscard = useCallback(async (path: string) => {
+    try {
+      await gitDiscard(path);
+      handleGitRefresh();
+    } catch (err) {
+      setGitError(`Discard failed: ${err}`);
+    }
+  }, [handleGitRefresh]);
+
+  const handleStageAll = useCallback(async () => {
+    try {
+      // Stage all unstaged files (changes + untracked)
+      const unstaged = gitFiles.filter((f) => !f.staged);
+      for (const f of unstaged) {
+        await gitStage(f.path).catch(() => {});
+      }
+      handleGitRefresh();
+    } catch (err) {
+      setGitError(`Stage all failed: ${err}`);
+    }
+  }, [gitFiles, handleGitRefresh]);
+
+  const handleUnstageAll = useCallback(async () => {
+    try {
+      const staged = gitFiles.filter((f) => f.staged);
+      for (const f of staged) {
+        await gitUnstage(f.path).catch(() => {});
+      }
+      handleGitRefresh();
+    } catch (err) {
+      setGitError(`Unstage all failed: ${err}`);
+    }
+  }, [gitFiles, handleGitRefresh]);
+
+  const handleGitStashSave = useCallback(async (message?: string) => {
+    try {
+      await gitStashSave(message);
+      handleGitRefresh();
+      const stashes = await gitStashList().catch(() => [] as GitStashInfo[]);
+      setGitStashes(stashes);
+    } catch (err) {
+      setGitError(`Stash save failed: ${err}`);
+    }
+  }, [handleGitRefresh]);
+
+  const handleGitStashPop = useCallback(async (index: number) => {
+    try {
+      await gitStashPop(index);
+      handleGitRefresh();
+      const stashes = await gitStashList().catch(() => [] as GitStashInfo[]);
+      setGitStashes(stashes);
+    } catch (err) {
+      setGitError(`Stash pop failed: ${err}`);
+    }
+  }, [handleGitRefresh]);
+
+  const handleGitStashApply = useCallback(async (index: number) => {
+    try {
+      await gitStashApply(index);
+      handleGitRefresh();
+    } catch (err) {
+      setGitError(`Stash apply failed: ${err}`);
+    }
+  }, [handleGitRefresh]);
+
+  const handleGitStashDrop = useCallback(async (index: number) => {
+    try {
+      await gitStashDrop(index);
+      const stashes = await gitStashList().catch(() => [] as GitStashInfo[]);
+      setGitStashes(stashes);
+    } catch (err) {
+      setGitError(`Stash drop failed: ${err}`);
+    }
+  }, []);
+
+  const handleGitLoadStashes = useCallback(async () => {
+    try {
+      const stashes = await gitStashList().catch(() => [] as GitStashInfo[]);
+      setGitStashes(stashes);
+    } catch { /* ignore */ }
+  }, []);
+
+  const handleGitLoadLog = useCallback(async () => {
+    try {
+      const entries = await gitLog(30).catch(() => [] as GitCommitInfo[]);
+      setGitLogEntries(entries);
+    } catch { /* ignore */ }
+  }, []);
 
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) { setSearchResults([]); return; }
@@ -345,15 +494,32 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
             files={gitFiles}
             branch={gitBranch}
             branches={gitBranchesList}
+            loading={gitLoading}
+            error={gitError}
             onCommit={handleGitCommit}
             onRefresh={handleGitRefresh}
+            onPush={handleGitPush}
+            onPull={handleGitPull}
+            onFetch={handleGitFetch}
+            onCreateBranch={handleGitCreateBranch}
+            onDiscardFile={handleGitDiscard}
+            onStageAll={handleStageAll}
+            onUnstageAll={handleUnstageAll}
+            onStashSave={handleGitStashSave}
+            onStashPop={handleGitStashPop}
+            onStashApply={handleGitStashApply}
+            onStashDrop={handleGitStashDrop}
+            onLoadStashes={handleGitLoadStashes}
+            stashes={gitStashes}
+            onLogLoad={handleGitLoadLog}
+            logEntries={gitLogEntries}
             onSwitchBranch={async (name) => {
               await gitSwitchBranch(name).catch(() => {});
               handleGitRefresh();
             }}
             onStageFile={async (path) => {
               const file = gitFiles.find((f) => f.path === path);
-              if (file?.status === "added") {
+              if (file?.staged) {
                 await gitUnstage(path).catch(() => {});
               } else {
                 await gitStage(path).catch(() => {});

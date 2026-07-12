@@ -96,6 +96,14 @@ export async function setProjectRoot(path: string): Promise<string> {
 }
 
 /**
+ * Open a new IDE window with the given folder as the project root.
+ * Spawns a new Oceanix process with its working directory set to `path`.
+ */
+export async function openNewWindow(path: string): Promise<void> {
+  return invoke("open_new_window", { path });
+}
+
+/**
  * Open a native folder picker dialog and return the selected path (or null if cancelled).
  * Uses @tauri-apps/plugin-dialog.
  */
@@ -110,9 +118,23 @@ export async function openFolderDialog(): Promise<string | null> {
   }
 }
 
+/**
+ * Open a native file picker dialog and return the selected path (or null if cancelled).
+ */
+export async function openFileDialog(): Promise<string | null> {
+  try {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const selected = await open({ multiple: false, title: "Open File" });
+    return selected as string | null;
+  } catch (e) {
+    console.error("openFileDialog failed:", e);
+    return null;
+  }
+}
+
 // ─── Git ─────────────────────────────────────────────
 
-export async function gitStatus(): Promise<Array<{ path: string; status: string }>> {
+export async function gitStatus(): Promise<Array<{ path: string; status: string; staged: boolean }>> {
   return invoke("git_status");
 }
 
@@ -140,12 +162,12 @@ export async function gitUnstage(path: string): Promise<void> {
   return invoke("git_unstage", { path });
 }
 
-export async function gitPush(branch: string): Promise<void> {
-  return invoke("git_push", { branch });
+export async function gitPush(branch: string, remote?: string): Promise<void> {
+  return invoke("git_push", { branch, remote });
 }
 
-export async function gitPull(branch: string): Promise<void> {
-  return invoke("git_pull", { branch });
+export async function gitPull(branch: string, remote?: string): Promise<void> {
+  return invoke("git_pull", { branch, remote });
 }
 
 export async function gitCreateBranch(name: string): Promise<void> {
@@ -154,6 +176,191 @@ export async function gitCreateBranch(name: string): Promise<void> {
 
 export async function gitSwitchBranch(name: string): Promise<void> {
   return invoke("git_switch_branch", { name });
+}
+
+export async function gitDeleteBranch(name: string): Promise<void> {
+  return invoke("git_delete_branch", { name });
+}
+
+// ─── Git Log ──────────────────────────────────────
+
+export interface GitCommitEntry {
+  oid: string;
+  shortOid: string;
+  message: string;
+  author: string;
+  email: string;
+  time: number;
+  timeOffset: number;
+}
+
+export async function gitLog(count: number): Promise<GitCommitEntry[]> {
+  return invoke("git_log", { count });
+}
+
+export async function gitLogFile(path: string, count: number): Promise<GitCommitEntry[]> {
+  return invoke("git_log_file", { path, count });
+}
+
+export async function gitCommitDetail(oid: string): Promise<{ info: GitCommitEntry; diff: string }> {
+  return invoke("git_commit_detail", { oid });
+}
+
+// ─── Git Stash ────────────────────────────────────
+
+export interface GitStashEntry {
+  index: number;
+  message: string;
+  oid: string;
+}
+
+export async function gitStashSave(message?: string): Promise<void> {
+  return invoke("git_stash_save", { message });
+}
+
+export async function gitStashList(): Promise<GitStashEntry[]> {
+  return invoke("git_stash_list");
+}
+
+export async function gitStashPop(index: number): Promise<void> {
+  return invoke("git_stash_pop", { index });
+}
+
+export async function gitStashApply(index: number): Promise<void> {
+  return invoke("git_stash_apply", { index });
+}
+
+export async function gitStashDrop(index: number): Promise<void> {
+  return invoke("git_stash_drop", { index });
+}
+
+// ─── Git Fetch ────────────────────────────────────
+
+export async function gitFetch(remote?: string): Promise<void> {
+  return invoke("git_fetch", { remote });
+}
+
+// ─── Git Discard ──────────────────────────────────
+
+export async function gitDiscard(path: string): Promise<void> {
+  return invoke("git_discard", { path });
+}
+
+// ─── Git Reset ────────────────────────────────────
+
+export async function gitReset(oid: string, mode: string): Promise<void> {
+  return invoke("git_reset", { oid, mode });
+}
+
+// ─── Git Revert ───────────────────────────────────
+
+export async function gitRevert(oid: string): Promise<string> {
+  return invoke("git_revert", { oid });
+}
+
+// ─── Git Cherry-pick ──────────────────────────────
+
+export async function gitCherryPick(oid: string): Promise<string> {
+  return invoke("git_cherry_pick", { oid });
+}
+
+// ─── Git Merge ────────────────────────────────────
+
+export async function gitMergeBranch(branch: string): Promise<string> {
+  return invoke("git_merge_branch", { branch });
+}
+
+// ─── Git Rebase ───────────────────────────────────
+
+export async function gitRebase(onto: string): Promise<void> {
+  return invoke("git_rebase", { onto });
+}
+
+// ─── Git Tags ─────────────────────────────────────
+
+export interface GitTagEntry {
+  name: string;
+  oid: string;
+}
+
+export async function gitTagList(): Promise<GitTagEntry[]> {
+  return invoke("git_tag_list");
+}
+
+export async function gitTagCreate(name: string, message?: string): Promise<string> {
+  return invoke("git_tag_create", { name, message });
+}
+
+export async function gitTagDelete(name: string): Promise<void> {
+  return invoke("git_tag_delete", { name });
+}
+
+// ─── Git Remote ───────────────────────────────────
+
+export interface GitRemoteEntry {
+  name: string;
+  url: string;
+}
+
+export async function gitRemoteList(): Promise<GitRemoteEntry[]> {
+  return invoke("git_remote_list");
+}
+
+export async function gitRemoteAdd(name: string, url: string): Promise<void> {
+  return invoke("git_remote_add", { name, url });
+}
+
+export async function gitRemoteRemove(name: string): Promise<void> {
+  return invoke("git_remote_remove", { name });
+}
+
+// ─── Git Blame ────────────────────────────────────
+
+export interface GitBlameEntry {
+  line: number;
+  commitOid: string;
+  commitShort: string;
+  author: string;
+  time: number;
+  summary: string;
+}
+
+export async function gitBlame(path: string): Promise<GitBlameEntry[]> {
+  return invoke("git_blame", { path });
+}
+
+// ─── Git Init / Clone ─────────────────────────────
+
+export async function gitInit(path: string): Promise<string> {
+  return invoke("git_init", { path });
+}
+
+export async function gitClone(url: string, path: string): Promise<string> {
+  return invoke("git_clone", { url, path });
+}
+
+// ─── Git Config ───────────────────────────────────
+
+export async function gitConfigGet(key: string): Promise<string> {
+  return invoke("git_config_get", { key });
+}
+
+export async function gitConfigSet(key: string, value: string): Promise<void> {
+  return invoke("git_config_set", { key, value });
+}
+
+// ─── Git Conflicts ────────────────────────────────
+
+export async function gitHasConflicts(): Promise<boolean> {
+  return invoke("git_has_conflicts");
+}
+
+export async function gitConflictFiles(): Promise<string[]> {
+  return invoke("git_conflict_files");
+}
+
+export async function gitResolveConflict(path: string): Promise<void> {
+  return invoke("git_resolve_conflict", { path });
 }
 
 // ─── LSP ─────────────────────────────────────────────

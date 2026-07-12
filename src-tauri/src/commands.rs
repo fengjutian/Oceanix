@@ -286,6 +286,7 @@ use oceanix_git::GitRepo;
 pub struct GitStatusEntry {
     path: String,
     status: String,
+    staged: bool,
 }
 
 #[derive(serde::Serialize)]
@@ -293,6 +294,50 @@ pub struct GitBranchEntry {
     name: String,
     #[serde(rename = "isHead")]
     is_head: bool,
+}
+
+#[derive(serde::Serialize)]
+pub struct GitCommitEntry {
+    oid: String,
+    #[serde(rename = "shortOid")]
+    short_oid: String,
+    message: String,
+    author: String,
+    email: String,
+    time: i64,
+    #[serde(rename = "timeOffset")]
+    time_offset: i32,
+}
+
+#[derive(serde::Serialize)]
+pub struct GitStashEntry {
+    index: usize,
+    message: String,
+    oid: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct GitTagEntry {
+    name: String,
+    oid: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct GitRemoteEntry {
+    name: String,
+    url: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct GitBlameEntry {
+    line: u32,
+    #[serde(rename = "commitOid")]
+    commit_oid: String,
+    #[serde(rename = "commitShort")]
+    commit_short: String,
+    author: String,
+    time: i64,
+    summary: String,
 }
 
 fn repo_from_state(state: &tauri::State<'_, crate::GitState>) -> Result<GitRepo, String> {
@@ -316,6 +361,7 @@ pub fn git_status(state: tauri::State<'_, crate::GitState>) -> Result<Vec<GitSta
                 oceanix_git::StatusKind::Deleted => "deleted".into(),
                 oceanix_git::StatusKind::Untracked => "untracked".into(),
             },
+            staged: f.staged,
         })
         .collect())
 }
@@ -365,15 +411,15 @@ pub fn git_unstage(path: String, state: tauri::State<'_, crate::GitState>) -> Re
 }
 
 #[tauri::command]
-pub fn git_push(branch: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+pub fn git_push(branch: String, remote: Option<String>, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.push("origin", &branch)
+    repo.push(remote.as_deref().unwrap_or("origin"), &branch)
 }
 
 #[tauri::command]
-pub fn git_pull(branch: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+pub fn git_pull(branch: String, remote: Option<String>, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.pull("origin", &branch)
+    repo.pull(remote.as_deref().unwrap_or("origin"), &branch)
 }
 
 #[tauri::command]
@@ -389,6 +435,275 @@ pub fn git_switch_branch(name: String, state: tauri::State<'_, crate::GitState>)
 }
 
 #[tauri::command]
+pub fn git_delete_branch(name: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let repo = repo_from_state(&state)?;
+    repo.delete_branch(&name)
+}
+
+// ─── New: Log ──────────────────────────────────────
+
+#[tauri::command]
+pub fn git_log(count: usize, state: tauri::State<'_, crate::GitState>) -> Result<Vec<GitCommitEntry>, String> {
+    let repo = repo_from_state(&state)?;
+    Ok(repo
+        .log(count)?
+        .into_iter()
+        .map(|c| GitCommitEntry {
+            oid: c.oid,
+            short_oid: c.short_oid,
+            message: c.message,
+            author: c.author,
+            email: c.email,
+            time: c.time,
+            time_offset: c.time_offset,
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub fn git_log_file(path: String, count: usize, state: tauri::State<'_, crate::GitState>) -> Result<Vec<GitCommitEntry>, String> {
+    let repo = repo_from_state(&state)?;
+    Ok(repo
+        .log_file(&path, count)?
+        .into_iter()
+        .map(|c| GitCommitEntry {
+            oid: c.oid,
+            short_oid: c.short_oid,
+            message: c.message,
+            author: c.author,
+            email: c.email,
+            time: c.time,
+            time_offset: c.time_offset,
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub fn git_commit_detail(oid: String, state: tauri::State<'_, crate::GitState>) -> Result<serde_json::Value, String> {
+    let repo = repo_from_state(&state)?;
+    let (info, diff) = repo.commit_detail(&oid)?;
+    Ok(serde_json::json!({
+        "info": {
+            "oid": info.oid,
+            "shortOid": info.short_oid,
+            "message": info.message,
+            "author": info.author,
+            "email": info.email,
+            "time": info.time,
+            "timeOffset": info.time_offset,
+        },
+        "diff": diff,
+    }))
+}
+
+// ─── New: Stash ────────────────────────────────────
+
+#[tauri::command]
+pub fn git_stash_save(message: Option<String>, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let mut repo = repo_from_state(&state)?;
+    repo.stash_save(message.as_deref())
+}
+
+#[tauri::command]
+pub fn git_stash_list(state: tauri::State<'_, crate::GitState>) -> Result<Vec<GitStashEntry>, String> {
+    let mut repo = repo_from_state(&state)?;
+    Ok(repo
+        .stash_list()?
+        .into_iter()
+        .map(|s| GitStashEntry { index: s.index, message: s.message, oid: s.oid })
+        .collect())
+}
+
+#[tauri::command]
+pub fn git_stash_pop(index: usize, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let mut repo = repo_from_state(&state)?;
+    repo.stash_pop(index)
+}
+
+#[tauri::command]
+pub fn git_stash_apply(index: usize, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let mut repo = repo_from_state(&state)?;
+    repo.stash_apply(index)
+}
+
+#[tauri::command]
+pub fn git_stash_drop(index: usize, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let mut repo = repo_from_state(&state)?;
+    repo.stash_drop(index)
+}
+
+// ─── New: Fetch ────────────────────────────────────
+
+#[tauri::command]
+pub fn git_fetch(remote: Option<String>, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let repo = repo_from_state(&state)?;
+    repo.fetch(remote.as_deref().unwrap_or("origin"))
+}
+
+// ─── New: Discard ──────────────────────────────────
+
+#[tauri::command]
+pub fn git_discard(path: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let repo = repo_from_state(&state)?;
+    repo.discard(&path)
+}
+
+// ─── New: Reset ────────────────────────────────────
+
+#[tauri::command]
+pub fn git_reset(oid: String, mode: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let repo = repo_from_state(&state)?;
+    repo.reset(&oid, &mode)
+}
+
+// ─── New: Revert ───────────────────────────────────
+
+#[tauri::command]
+pub fn git_revert(oid: String, state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
+    let repo = repo_from_state(&state)?;
+    repo.revert(&oid)
+}
+
+// ─── New: Cherry-pick ──────────────────────────────
+
+#[tauri::command]
+pub fn git_cherry_pick(oid: String, state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
+    let repo = repo_from_state(&state)?;
+    repo.cherry_pick(&oid)
+}
+
+// ─── New: Merge ────────────────────────────────────
+
+#[tauri::command]
+pub fn git_merge_branch(branch: String, state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
+    let repo = repo_from_state(&state)?;
+    repo.merge_branch(&branch)
+}
+
+// ─── New: Rebase ───────────────────────────────────
+
+#[tauri::command]
+pub fn git_rebase(onto: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let repo = repo_from_state(&state)?;
+    repo.rebase(&onto)
+}
+
+// ─── New: Tags ─────────────────────────────────────
+
+#[tauri::command]
+pub fn git_tag_list(state: tauri::State<'_, crate::GitState>) -> Result<Vec<GitTagEntry>, String> {
+    let repo = repo_from_state(&state)?;
+    Ok(repo
+        .tag_list()?
+        .into_iter()
+        .map(|t| GitTagEntry { name: t.name, oid: t.oid })
+        .collect())
+}
+
+#[tauri::command]
+pub fn git_tag_create(name: String, message: Option<String>, state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
+    let repo = repo_from_state(&state)?;
+    repo.tag_create(&name, message.as_deref())
+}
+
+#[tauri::command]
+pub fn git_tag_delete(name: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let repo = repo_from_state(&state)?;
+    repo.tag_delete(&name)
+}
+
+// ─── New: Remote management ────────────────────────
+
+#[tauri::command]
+pub fn git_remote_list(state: tauri::State<'_, crate::GitState>) -> Result<Vec<GitRemoteEntry>, String> {
+    let repo = repo_from_state(&state)?;
+    Ok(repo
+        .remote_list()?
+        .into_iter()
+        .map(|r| GitRemoteEntry { name: r.name, url: r.url })
+        .collect())
+}
+
+#[tauri::command]
+pub fn git_remote_add(name: String, url: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let repo = repo_from_state(&state)?;
+    repo.remote_add(&name, &url)
+}
+
+#[tauri::command]
+pub fn git_remote_remove(name: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let repo = repo_from_state(&state)?;
+    repo.remote_remove(&name)
+}
+
+// ─── New: Blame ────────────────────────────────────
+
+#[tauri::command]
+pub fn git_blame(path: String, state: tauri::State<'_, crate::GitState>) -> Result<Vec<GitBlameEntry>, String> {
+    let repo = repo_from_state(&state)?;
+    Ok(repo
+        .blame(&path)?
+        .into_iter()
+        .map(|b| GitBlameEntry {
+            line: b.line,
+            commit_oid: b.commit_oid,
+            commit_short: b.commit_short,
+            author: b.author,
+            time: b.time,
+            summary: b.summary,
+        })
+        .collect())
+}
+
+// ─── New: Init / Clone ─────────────────────────────
+
+#[tauri::command]
+pub fn git_init(path: String) -> Result<String, String> {
+    let _repo = GitRepo::init(&path)?;
+    Ok(format!("Initialized empty Git repository in {}", path))
+}
+
+#[tauri::command]
+pub fn git_clone(url: String, path: String) -> Result<String, String> {
+    let _repo = GitRepo::clone(&url, &path)?;
+    Ok(format!("Cloned {} into {}", url, path))
+}
+
+// ─── New: Config ───────────────────────────────────
+
+#[tauri::command]
+pub fn git_config_get(key: String, state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
+    let repo = repo_from_state(&state)?;
+    repo.config_get(&key)
+}
+
+#[tauri::command]
+pub fn git_config_set(key: String, value: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let repo = repo_from_state(&state)?;
+    repo.config_set(&key, &value)
+}
+
+// ─── New: Conflicts ────────────────────────────────
+
+#[tauri::command]
+pub fn git_has_conflicts(state: tauri::State<'_, crate::GitState>) -> Result<bool, String> {
+    let repo = repo_from_state(&state)?;
+    repo.has_conflicts()
+}
+
+#[tauri::command]
+pub fn git_conflict_files(state: tauri::State<'_, crate::GitState>) -> Result<Vec<String>, String> {
+    let repo = repo_from_state(&state)?;
+    repo.conflict_files()
+}
+
+#[tauri::command]
+pub fn git_resolve_conflict(path: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
+    let repo = repo_from_state(&state)?;
+    repo.resolve_conflict(&path)
+}
+
+#[tauri::command]
 pub fn get_cwd() -> Result<String, String> {
     std::env::current_dir()
         .map(|p| p.to_string_lossy().to_string())
@@ -400,6 +715,20 @@ pub fn set_cwd(path: String) -> Result<String, String> {
     std::env::set_current_dir(&path)
         .map_err(|e| format!("Failed to set current dir: {e}"))?;
     Ok(path)
+}
+
+/// Spawn a new Oceanix IDE window with the given folder as the project root.
+/// The new process starts with its working directory set to `path`,
+/// so it auto-detects the project root on startup.
+#[tauri::command]
+pub fn open_new_window(path: String) -> Result<(), String> {
+    let exe = std::env::current_exe()
+        .map_err(|e| format!("Failed to get current exe path: {e}"))?;
+    std::process::Command::new(exe)
+        .current_dir(&path)
+        .spawn()
+        .map_err(|e| format!("Failed to spawn new window: {e}"))?;
+    Ok(())
 }
 
 // ─── LSP ────────────────────────────────────────────

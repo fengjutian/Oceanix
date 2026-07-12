@@ -5,9 +5,10 @@ interface ActivityBarProps {
   activeView: string;
   onViewChange: (view: string) => void;
   onOpenSettings?: () => void;
+  onOpenAgent?: () => void;
 }
 
-export default function ActivityBar({ activeView, onViewChange, onOpenSettings }: ActivityBarProps) {
+export default function ActivityBar({ activeView, onViewChange, onOpenSettings, onOpenAgent }: ActivityBarProps) {
   const { t } = useLocale();
   const icons: Record<string, { icon: React.ReactNode; label: string }> = {
     explorer: { icon: <FolderOpen size={20} />, label: t("activity.explorer") },
@@ -24,8 +25,14 @@ export default function ActivityBar({ activeView, onViewChange, onOpenSettings }
         {Object.entries(icons).map(([key, { icon, label }]) => (
           <button
             key={key}
-            className={`activity-btn ${activeView === key ? "active" : ""}`}
-            onClick={() => onViewChange(key)}
+            className={`activity-btn ${activeView === key && key !== "agent" ? "active" : ""}`}
+            onClick={() => {
+              if (key === "agent") {
+                onOpenAgent?.();
+              } else {
+                onViewChange(key);
+              }
+            }}
             title={label}
           >
             {icon}

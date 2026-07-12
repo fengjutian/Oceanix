@@ -13,11 +13,8 @@ import {
   searchInFiles,
   ragSearch, ragRebuild, ragStats,
   createFile, createDir, deleteFile, renameFile,
-  agentExecuteStreaming,
 } from "../services/api";
-import type { RAGResult, AgentStreamEvent } from "../services/api";
-import type { AgentTask, AgentStep } from "@oceanix/agent-workspace";
-import { AgentWorkspace } from "@oceanix/agent-workspace";
+import type { RAGResult } from "../services/api";
 import { useLocale } from "../i18n/LocaleContext";
 
 interface SidebarProps {
@@ -115,12 +112,6 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
   const [ragLoading, setRagLoading] = useState(false);
   const [ragError, setRagError] = useState<string | null>(null);
   const [ragStatsData, setRagStatsData] = useState<{ chunks: number; files: number; languages: string[] } | null>(null);
-
-  // Agent state
-  const [agentTasks, setAgentTasks] = useState<AgentTask[]>([]);
-  const [activeAgentTaskId, setActiveAgentTaskId] = useState<string | null>(null);
-  const [agentRunning, setAgentRunning] = useState(false);
-  const [agentInput, setAgentInput] = useState("");
 
   // Context menu state
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null);
@@ -476,126 +467,6 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
     }
   };
 
-  // ─── Agent handler ────────────────────────────────
-
-  const handleAgentExecute = useCallback(async () => {
-    const task = agentInput.trim();
-    if (!task || agentRunning) return;
-
-    const taskId = `task-${Date.now()}`;
-    const newTask: AgentTask = {
-      id: taskId,
-      title: task,
-      status: "running",
-      steps: [],
-    };
-
-    setAgentTasks((prev) => [...prev, newTask]);
-    setActiveAgentTaskId(taskId);
-    setAgentRunning(true);
-    setAgentInput("");
-
-    try {
-      await agentExecuteStreaming(
-        { task, maxSteps: 10 },
-        (event: AgentStreamEvent) => {
-          setAgentTasks((prev) =>
-            prev.map((t) => {
-              if (t.id !== taskId) return t;
-
-              switch (event.type) {
-                case "plan": {
-                  const steps: AgentStep[] = event.steps.map((desc, i) => ({
-                    id: `${taskId}-step-${i}`,
-                    description: desc,
-                    status: "pending" as const,
-                  }));
-                  return { ...t, steps };
-                }
-                case "step": {
-                  const steps = [...t.steps];
-                  if (event.index >= 0 && event.index < steps.length) {
-                    steps[event.index] = {
-                      ...steps[event.index],
-                      description: event.description || steps[event.index].description,
-                      status: event.status === "completed" ? "completed" as const
-                        : event.status === "failed" ? "failed" as const
-                        : "running" as const,
-                    };
-                  }
-                  return { ...t, steps };
-                }
-                case "tool_call": {
-                  const steps = [...t.steps];
-                  // Append tool call to the current (last running) step
-                  const activeIdx = steps.findIndex((s) => s.status === "running");
-                  if (activeIdx >= 0) {
-                    const s = steps[activeIdx];
-                    const toolCalls = [...(s.toolCalls || []), { name: event.tool, input: event.input, output: "" }];
-                    steps[activeIdx] = { ...s, toolCalls };
-                  }
-                  return { ...t, steps };
-                }
-                case "tool_result": {
-                  const steps = [...t.steps];
-                  // Update last tool call's output
-                  for (let i = steps.length - 1; i >= 0; i--) {
-                    const toolCalls = steps[i].toolCalls;
-                    if (toolCalls && toolCalls.length > 0) {
-                      const last = toolCalls[toolCalls.length - 1];
-                      if (last.name === event.tool && !last.output) {
-                        const updated = [...toolCalls];
-                        updated[updated.length - 1] = { ...last, output: event.output };
-                        steps[i] = { ...steps[i], toolCalls: updated };
-                        break;
-                      }
-                    }
-                  }
-                  return { ...t, steps };
-                }
-                case "result": {
-                  return {
-                    ...t,
-                    status: "completed" as const,
-                    steps: t.steps.map((s, i) => ({
-                      ...s,
-                      status: (event.steps_completed != null && i < event.steps_completed)
-                        ? "completed" as const : s.status,
-                      output: i === 0 && event.summary ? event.summary : s.output,
-                    })),
-                  };
-                }
-                case "error": {
-                  return { ...t, status: "failed" as const };
-                }
-                default:
-                  return t;
-              }
-            })
-          );
-        }
-      );
-    } catch (err) {
-      setAgentTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId
-            ? {
-                ...t,
-                status: "failed" as const,
-                steps: [{
-                  id: `${taskId}-step-0`,
-                  description: "Agent execution failed",
-                  status: "failed" as const,
-                  output: String(err),
-                }],
-              }
-            : t
-        )
-      );
-    } finally {
-      setAgentRunning(false);
-    }
-  }, [agentInput, agentRunning]);
 
   return (
     <div className="sidebar">
@@ -708,7 +579,6 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
                   <div style={ctxItemStyle} onClick={() => {
                     const n = ctxMenu.node;
                     setCtxMenu(null);
-                    setAgentInput(`Analyze: ${n.path}`);
                     onOpenInAgent?.(n.path);
                   }}>🤖 Open in Agent</div>
                 )}
@@ -870,57 +740,6 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
             }}
           />
         )
-      )}
-      {view === "agent" && (
-        <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-          {/* Agent input bar */}
-          <div style={{
-            display: "flex", gap: 6, padding: "8px",
-            borderBottom: "1px solid var(--border-color)",
-          }}>
-            <input
-              type="text"
-              value={agentInput}
-              onChange={(e) => setAgentInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleAgentExecute(); }}
-              placeholder={t("agent.placeholder") || "Describe what the agent should do..."}
-              disabled={agentRunning}
-              style={{
-                flex: 1,
-                background: "var(--bg-tertiary, #2d2d30)",
-                color: "var(--text-primary, #ccc)",
-                border: "1px solid var(--border-color, #3e3e42)",
-                borderRadius: 4,
-                padding: "6px 10px",
-                fontSize: 13,
-                outline: "none",
-              }}
-            />
-            <button
-              onClick={handleAgentExecute}
-              disabled={agentRunning || !agentInput.trim()}
-              style={{
-                background: agentRunning ? "var(--bg-tertiary)" : "var(--accent, #007acc)",
-                color: agentRunning ? "var(--text-secondary)" : "#fff",
-                border: "none",
-                borderRadius: 4,
-                padding: "6px 14px",
-                fontSize: 13,
-                cursor: agentRunning ? "not-allowed" : "pointer",
-              }}
-            >
-              {agentRunning ? "⏳" : "▶"}
-            </button>
-          </div>
-          {/* Agent workspace */}
-          <div style={{ flex: 1, overflow: "hidden" }}>
-            <AgentWorkspace
-              tasks={agentTasks}
-              activeTaskId={activeAgentTaskId}
-              onSelectTask={setActiveAgentTaskId}
-            />
-          </div>
-        </div>
       )}
       {view === "ai" && <ChatPanel selectionContext={selectionContext} editorContext={editorContext} />}
       {view === "rag" && (

@@ -11,6 +11,7 @@ import ProblemsPanel from "./components/ProblemsPanel";
 import DebugPanel from "./components/DebugPanel";
 import OutputPanel from "./components/OutputPanel";
 import SettingsPanel from "./components/SettingsPanel";
+import AgentDialog from "./components/AgentDialog";
 import type { editor } from "monaco-editor";
 import { CommandPalette, Command, filterCommands } from "@oceanix/command-palette";
 import MenuBar, { buildMenus, MenuActions } from "./components/MenuBar";
@@ -48,6 +49,8 @@ function App() {
   const [panelTab, setPanelTab] = useState<"terminal" | "problems" | "output" | "debug">("terminal");
   const [showPalette, setShowPalette] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAgentDialog, setShowAgentDialog] = useState(false);
+  const [agentInitialTask, setAgentInitialTask] = useState<string | undefined>(undefined);
   const [selectionContext, setSelectionContext] = useState<{ code: string; file: string; language: string } | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [projectRoot, setProjectRootState] = useState(".");
@@ -639,7 +642,7 @@ function App() {
     <div className="app-container">
       <MenuBar menus={menus} />
       <div className="app-main">
-        <ActivityBar activeView={sidebarView} onViewChange={(v) => { setSidebarView(v); setSidebarVisible(true); }} onOpenSettings={() => setShowSettings(true)} />
+        <ActivityBar activeView={sidebarView} onViewChange={(v) => { setSidebarView(v); setSidebarVisible(true); }} onOpenSettings={() => setShowSettings(true)} onOpenAgent={() => { setAgentInitialTask(undefined); setShowAgentDialog(true); }} />
         <PanelGroup direction="horizontal">
           {sidebarVisible && (
             <>
@@ -655,9 +658,9 @@ function App() {
                     activeFile: activeTab?.path ?? "",
                     activeLanguage: activeTab?.language,
                   }}
-                  onOpenInAgent={(_path) => {
-                    setSidebarView("agent");
-                    setSidebarVisible(true);
+                  onOpenInAgent={(path) => {
+                    setAgentInitialTask(`Analyze: ${path}`);
+                    setShowAgentDialog(true);
                   }}
                 />
               </Panel>
@@ -795,6 +798,14 @@ function App() {
             <SettingsPanel onClose={() => setShowSettings(false)} />
           </div>
         </GlassDialog>
+      )}
+
+      {showAgentDialog && (
+        <AgentDialog
+          open={showAgentDialog}
+          onClose={() => setShowAgentDialog(false)}
+          initialTask={agentInitialTask}
+        />
       )}
 
       {/* File open choice dialog */}

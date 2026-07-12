@@ -7,11 +7,11 @@ import {
   loadSessions,
   saveSessions,
   createSession as newSession,
+  deriveStatus,
+  sortSessions,
 } from "./agentPersistence";
 
 // ─── Pure stream event reducer ──────────────────────
-// Applies a single AgentStreamEvent to an AgentTask, returning the updated task.
-// Extracted from AgentDialog's inline switch so it can be tested and reused.
 
 export function applyStreamEvent(task: AgentTask, event: AgentStreamEvent): AgentTask {
   switch (event.type) {
@@ -87,7 +87,7 @@ export function applyStreamEvent(task: AgentTask, event: AgentStreamEvent): Agen
   }
 }
 
-// ─── Internal reducer for useAgentService ────────────
+// ─── Internal reducer ───────────────────────────────
 
 interface AgentState {
   sessions: AgentSession[];
@@ -101,17 +101,41 @@ type AgentAction =
   | { type: "ADD_SESSION"; session: AgentSession }
   | { type: "SWITCH_SESSION"; sessionId: string }
   | { type: "DELETE_SESSION"; sessionId: string }
+  | { type: "PIN_SESSION"; sessionId: string; pinned: boolean }
+  | { type: "ARCHIVE_SESSION"; sessionId: string; archived: boolean }
   | { type: "ADD_TASK"; task: AgentTask }
   | { type: "STREAM_EVENT"; taskId: string; event: AgentStreamEvent }
   | { type: "SET_ACTIVE"; taskId: string | null }
   | { type: "TASK_ERROR"; taskId: string; error: string }
   | { type: "SET_RUNNING"; running: boolean };
 
-function updateActiveSession(state: AgentState, updater: (session: AgentSession) => AgentSession): AgentState {
+function updateActiveSession(
+  state: AgentState,
+  updater: (session: AgentSession) => AgentSession,
+): AgentState {
+  return {
+    ...state,
+    sessions: state.sessions.map((s) => {
+      if (s.id !== state.activeSessionId) return s;
+      const updated = updater(s);
+      return {
+        ...updated,
+        status: deriveStatus(updated.tasks),
+        timing: { ...updated.timing, lastActivityAt: new Date().toISOString() },
+      };
+    }),
+  };
+}
+
+function updateSessionById(
+  state: AgentState,
+  sessionId: string,
+  updater: (session: AgentSession) => AgentSession,
+): AgentState {
   return {
     ...state,
     sessions: state.sessions.map((s) =>
-      s.id === state.activeSessionId ? updater(s) : s,
+      s.id === sessionId ? updater(s) : s,
     ),
   };
 }
@@ -122,9 +146,10 @@ function agentReducer(state: AgentState, action: AgentAction): AgentState {
       return {
         ...state,
         sessions: action.sessions,
-        activeSessionId: action.sessions.length > 0
-          ? action.sessions[0].id
-          : state.activeSessionId,
+        activeSessionId:
+          action.sessions.length > 0
+            ? action.sessions[0].id
+            : state.activeSessionId,
       };
     case "ADD_SESSION":
       return {
@@ -137,21 +162,38 @@ function agentReducer(state: AgentState, action: AgentAction): AgentState {
       return {
         ...state,
         activeSessionId: action.sessionId,
-        activeTaskId: state.sessions.find((s) => s.id === action.sessionId)?.tasks[0]?.id ?? null,
+        activeTaskId:
+          state.sessions.find((s) => s.id === action.sessionId)?.tasks[0]
+            ?.id ?? null,
       };
     case "DELETE_SESSION": {
-      const remaining = state.sessions.filter((s) => s.id !== action.sessionId);
+      const remaining = state.sessions.filter(
+        (s) => s.id !== action.sessionId,
+      );
       return {
         ...state,
         sessions: remaining,
-        activeSessionId: state.activeSessionId === action.sessionId
-          ? (remaining[0]?.id ?? state.activeSessionId)
-          : state.activeSessionId,
-        activeTaskId: state.activeSessionId === action.sessionId
-          ? (remaining[0]?.tasks[0]?.id ?? null)
-          : state.activeTaskId,
+        activeSessionId:
+          state.activeSessionId === action.sessionId
+            ? (remaining[0]?.id ?? state.activeSessionId)
+            : state.activeSessionId,
+        activeTaskId:
+          state.activeSessionId === action.sessionId
+            ? (remaining[0]?.tasks[0]?.id ?? null)
+            : state.activeTaskId,
       };
     }
+    case "PIN_SESSION":
+      return updateSessionById(state, action.sessionId, (s) => ({
+        ...s,
+        pinned: action.pinned,
+      }));
+    case "ARCHIVE_SESSION":
+      return updateSessionById(state, action.sessionId, (s) => ({
+        ...s,
+        archived: action.archived,
+        pinned: action.archived ? false : s.pinned, // un-pin when archiving
+      }));
     case "ADD_TASK":
       return updateActiveSession(state, (s) => ({
         ...s,
@@ -215,13 +257,12 @@ export function useAgentService() {
     if (saved.length > 0) {
       dispatch({ type: "LOAD_SESSIONS", sessions: saved });
     } else {
-      // Create a fresh default session
       const session = newSession();
       dispatch({ type: "ADD_SESSION", session });
     }
   }, []);
 
-  // Persist whenever sessions change (skip initial load)
+  // Persist whenever sessions change
   const sessionsRef = useRef(state.sessions);
   useEffect(() => {
     if (!loadedRef.current) return;
@@ -247,6 +288,20 @@ export function useAgentService() {
   const deleteSession = useCallback((sessionId: string) => {
     dispatch({ type: "DELETE_SESSION", sessionId });
   }, []);
+
+  const pinSession = useCallback(
+    (sessionId: string, pinned: boolean) => {
+      dispatch({ type: "PIN_SESSION", sessionId, pinned });
+    },
+    [],
+  );
+
+  const archiveSession = useCallback(
+    (sessionId: string, archived: boolean) => {
+      dispatch({ type: "ARCHIVE_SESSION", sessionId, archived });
+    },
+    [],
+  );
 
   const execute = useCallback(
     async (task: string) => {
@@ -282,17 +337,21 @@ export function useAgentService() {
   );
 
   const activeSession = getActiveSession(state);
+  const sortedSessions = sortSessions(state.sessions);
 
   return {
     // Session level
-    sessions: state.sessions,
+    sessions: sortedSessions,
+    allSessions: state.sessions, // unsorted raw list
     activeSessionId: state.activeSessionId,
     activeSession,
     createSession,
     switchSession,
     deleteSession,
+    pinSession,
+    archiveSession,
 
-    // Task level (from active session)
+    // Task level
     tasks: activeSession?.tasks || [],
     activeTaskId: state.activeTaskId,
     setActiveTaskId,

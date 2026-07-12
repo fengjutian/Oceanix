@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { GlassBtn } from "@oceanix/glass";
 import { AgentWorkspace } from "@oceanix/agent-workspace";
 import { useAgentService } from "../services/agentService";
-import { sessionTitle } from "../services/agentPersistence";
+import { sessionTitle, groupSessionsByDate } from "../services/agentPersistence";
 import { useResizable, resizeHandleStyle, RESIZE_CURSORS } from "../hooks/useResizable";
+import AgentSettings from "./AgentSettings";
 
 // ─── Minimized floating badge ──────────────────────
 
@@ -97,21 +98,12 @@ function Sash({
 // ─── Sessions sidebar ──────────────────────────────
 
 const STATUS_ICONS: Record<string, string> = {
-  pending: "○",
+  idle: "○",
   running: "◉",
-  awaiting_confirm: "⚠",
+  needsInput: "⚠",
   completed: "✅",
   failed: "❌",
 };
-
-function sessionStatus(session: import("../services/agentPersistence").AgentSession): string {
-  if (session.tasks.length === 0) return "○";
-  const statuses = session.tasks.map((t) => t.status);
-  if (statuses.some((s) => s === "running")) return "running";
-  if (statuses.some((s) => s === "failed")) return "failed";
-  if (statuses.every((s) => s === "completed")) return "completed";
-  return "pending";
-}
 
 function SessionsSidebar({
   sessions,
@@ -119,6 +111,8 @@ function SessionsSidebar({
   onSwitch,
   onDelete,
   onCreate,
+  onPin,
+  onArchive,
   width,
 }: {
   sessions: import("../services/agentPersistence").AgentSession[];
@@ -126,9 +120,14 @@ function SessionsSidebar({
   onSwitch: (id: string) => void;
   onDelete: (id: string) => void;
   onCreate: () => void;
+  onPin: (id: string, pinned: boolean) => void;
+  onArchive: (id: string, archived: boolean) => void;
   width: number;
 }) {
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const [showArchivedLocal, setShowArchivedLocal] = useState(false);
+
+  const groups = groupSessionsByDate(sessions);
 
   return (
     <div
@@ -137,9 +136,9 @@ function SessionsSidebar({
         flexShrink: 0,
         overflowY: "auto",
         overflowX: "hidden",
-        borderRight: "none", // sash handles the border
         display: "flex",
         flexDirection: "column",
+        background: "var(--bg-secondary, #252526)",
       }}
     >
       {/* New Session button */}
@@ -162,57 +161,146 @@ function SessionsSidebar({
         </button>
       </div>
 
-      {/* Session list */}
-      {sessions.map((s) => {
-        const isActive = s.id === activeId;
-        const status = sessionStatus(s);
+      {/* Session groups */}
+      {groups.map((group) => {
+        if (group.label === "Archived" && !showArchivedLocal) return null;
         return (
-          <div
-            key={s.id}
-            onClick={() => onSwitch(s.id)}
-            onMouseEnter={() => setHoverId(s.id)}
-            onMouseLeave={() => setHoverId(null)}
-            style={{
-              padding: "6px 10px",
-              cursor: "pointer",
-              fontSize: 12,
-              color: isActive
-                ? "var(--text-primary, #ccc)"
-                : "var(--text-secondary, #858585)",
-              background: isActive
-                ? "var(--bg-tertiary, #2d2d30)"
-                : "transparent",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              borderLeft: isActive
-                ? "2px solid var(--accent, #007acc)"
-                : "2px solid transparent",
-            }}
-          >
-            <span>{STATUS_ICONS[status] || "○"}</span>
-            <span
+          <div key={group.label}>
+            <div
               style={{
-                flex: 1,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                padding: "4px 10px",
+                fontSize: 10,
+                fontWeight: 600,
+                color: "var(--text-secondary, #858585)",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
               }}
             >
-              {sessionTitle(s)}
-            </span>
-            {hoverId === s.id && sessions.length > 1 && (
-              <span
-                onClick={(e) => { e.stopPropagation(); onDelete(s.id); }}
-                title="Delete session"
-                style={{ opacity: 0.5, cursor: "pointer", flexShrink: 0 }}
-              >
-                ✕
-              </span>
-            )}
+              {group.label}
+            </div>
+            {group.sessions.map((s) => {
+              const isActive = s.id === activeId;
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => onSwitch(s.id)}
+                  onMouseEnter={() => setHoverId(s.id)}
+                  onMouseLeave={() => setHoverId(null)}
+                  style={{
+                    padding: "5px 10px",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    color: isActive
+                      ? "var(--text-primary, #ccc)"
+                      : "var(--text-secondary, #858585)",
+                    background: isActive
+                      ? "var(--bg-tertiary, #2d2d30)"
+                      : "transparent",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    borderLeft: isActive
+                      ? "2px solid var(--accent, #007acc)"
+                      : "2px solid transparent",
+                  }}
+                >
+                  <span style={{ flexShrink: 0 }}>
+                    {s.pinned ? "📌" : STATUS_ICONS[s.status]}
+                  </span>
+                  <span
+                    style={{
+                      flex: 1,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {sessionTitle(s)}
+                  </span>
+                  {/* Hover actions */}
+                  {hoverId === s.id && (
+                    <span
+                      style={{
+                        display: "flex",
+                        gap: 2,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {/* Pin toggle */}
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPin(s.id, !s.pinned);
+                        }}
+                        title={s.pinned ? "Unpin" : "Pin to top"}
+                        style={{
+                          opacity: 0.5,
+                          cursor: "pointer",
+                          fontSize: 11,
+                        }}
+                      >
+                        {s.pinned ? "📌" : "📍"}
+                      </span>
+                      {/* Archive toggle */}
+                      {!s.archived && (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onArchive(s.id, true);
+                          }}
+                          title="Archive"
+                          style={{
+                            opacity: 0.5,
+                            cursor: "pointer",
+                            fontSize: 11,
+                          }}
+                        >
+                          📦
+                        </span>
+                      )}
+                      {/* Delete */}
+                      {sessions.length > 1 && (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete(s.id);
+                          }}
+                          title="Delete session"
+                          style={{
+                            opacity: 0.5,
+                            cursor: "pointer",
+                            fontSize: 11,
+                          }}
+                        >
+                          ✕
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         );
       })}
+
+      {/* Archived toggle */}
+      {groups.some((g) => g.label === "Archived" && g.sessions.length > 0) && (
+        <div
+          onClick={() => setShowArchivedLocal((v) => !v)}
+          style={{
+            padding: "6px 10px",
+            fontSize: 11,
+            color: "var(--text-secondary, #858585)",
+            cursor: "pointer",
+            textAlign: "center",
+            borderTop: "1px solid var(--border-color, #3e3e42)",
+            marginTop: "auto",
+          }}
+        >
+          {showArchivedLocal ? "▲ Hide Archived" : "▼ Archived"}
+        </div>
+      )}
 
       {sessions.length === 0 && (
         <div
@@ -220,6 +308,7 @@ function SessionsSidebar({
             padding: 12,
             color: "var(--text-secondary, #858585)",
             fontSize: 12,
+            textAlign: "center",
           }}
         >
           No sessions yet
@@ -248,6 +337,8 @@ export default function AgentDialog({ open, onClose, initialTask }: AgentDialogP
     createSession,
     switchSession,
     deleteSession,
+    pinSession,
+    archiveSession,
     input,
     setInput,
     execute,
@@ -257,6 +348,7 @@ export default function AgentDialog({ open, onClose, initialTask }: AgentDialogP
   const { width, height, isResizing, startResize } = useResizable("agent-dialog");
   const [isPinned, setIsPinned] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [sashX, setSashX] = useState(() => {
     try {
       const raw = localStorage.getItem("oceanix-agent-sash");
@@ -393,6 +485,20 @@ export default function AgentDialog({ open, onClose, initialTask }: AgentDialogP
             ✨ Oceanix Agent
           </span>
 
+          {/* Settings */}
+          <GlassBtn
+            onClick={() => setShowSettings((v) => !v)}
+            title="Agent Settings"
+            style={{
+              fontSize: 14,
+              padding: "2px 6px",
+              minWidth: "unset",
+              color: showSettings ? "var(--accent, #007acc)" : undefined,
+            }}
+          >
+            ⚙
+          </GlassBtn>
+
           {/* Close */}
           <GlassBtn onClick={onClose} title="Close" style={{ fontSize: 14, padding: "2px 6px", minWidth: "unset" }}>
             ✕
@@ -447,6 +553,8 @@ export default function AgentDialog({ open, onClose, initialTask }: AgentDialogP
             onSwitch={switchSession}
             onDelete={deleteSession}
             onCreate={() => createSession()}
+            onPin={pinSession}
+            onArchive={archiveSession}
             width={sashX}
           />
           <Sash onDrag={handleSashDrag} />

@@ -576,6 +576,7 @@ export type AgentStreamEvent =
   | { type: "step"; index: number; description: string; status: string }
   | { type: "tool_call"; tool: string; input: string }
   | { type: "tool_result"; tool: string; output: string }
+  | { type: "file_changes"; files: number; insertions: number; deletions: number }
   | { type: "result"; summary: string; plan?: string[]; steps_completed?: number; messages?: Array<{ role: string; content: string }> }
   | { type: "error"; message: string }
   | { type: "done" };

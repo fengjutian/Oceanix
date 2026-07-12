@@ -40,6 +40,7 @@ const DEFAULT_BINDINGS: KeyBinding[] = [
   { key: "Ctrl+Shift+V", command: "markdown.preview", label: "Markdown Preview" },
   { key: "Shift+F12", command: "editor.goToReferences", label: "Go to References" },
   { key: "F9", command: "editor.toggleBreakpoint", label: "Toggle Breakpoint" },
+  { key: "", command: "agent.newSession", label: "Agent: New Session" },
 ];
 
 function App() {
@@ -51,6 +52,8 @@ function App() {
   const [showPalette, setShowPalette] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const agentOpener = useAgentOpener();
+  const agentOpenerRef = useRef(agentOpener);
+  agentOpenerRef.current = agentOpener;
   const [selectionContext, setSelectionContext] = useState<{ code: string; file: string; language: string } | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [projectRoot, setProjectRootState] = useState(".");
@@ -432,6 +435,14 @@ function App() {
         }
       },
     },
+    {
+      id: "agent.newSession",
+      label: "Agent: New Session",
+      category: "Agent",
+      action: () => {
+        agentOpenerRef.current.open();
+      },
+    },
   ], [activeTabId, saveTab, closeTab, openTab]);
 
   // Always holds the latest commands so the keybinding registry
@@ -480,6 +491,9 @@ function App() {
     registerGlobalCommand("palette.show", () => handler("palette.show"));
     registerGlobalCommand("theme.toggle", () => handler("theme.toggle"));
     registerGlobalCommand("settings.open", () => handler("settings.open"));
+    registerGlobalCommand("agent.newSession", () => {
+      agentOpenerRef.current.open();
+    });
 
     registry.attach();
     return () => registry.detach();

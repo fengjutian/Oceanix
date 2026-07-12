@@ -82,6 +82,10 @@ export function applyStreamEvent(task: AgentTask, event: AgentStreamEvent): Agen
     case "error": {
       return { ...task, status: "failed" as const };
     }
+    case "file_changes": {
+      // file_changes updates session-level data, not task-level
+      return task;
+    }
     default:
       return task;
   }
@@ -107,7 +111,8 @@ type AgentAction =
   | { type: "STREAM_EVENT"; taskId: string; event: AgentStreamEvent }
   | { type: "SET_ACTIVE"; taskId: string | null }
   | { type: "TASK_ERROR"; taskId: string; error: string }
-  | { type: "SET_RUNNING"; running: boolean };
+  | { type: "SET_RUNNING"; running: boolean }
+  | { type: "FILE_CHANGES"; changes: { files: number; insertions: number; deletions: number } };
 
 function updateActiveSession(
   state: AgentState,
@@ -230,6 +235,15 @@ function agentReducer(state: AgentState, action: AgentAction): AgentState {
       }));
     case "SET_RUNNING":
       return { ...state, running: action.running };
+    case "FILE_CHANGES":
+      return updateActiveSession(state, (s) => ({
+        ...s,
+        changes: {
+          files: action.changes.files,
+          insertions: action.changes.insertions,
+          deletions: action.changes.deletions,
+        },
+      }));
   }
 }
 
@@ -324,6 +338,17 @@ export function useAgentService() {
         await agentExecuteStreaming(
           { task: trimmed, maxSteps: 10 },
           (event: AgentStreamEvent) => {
+            if (event.type === "file_changes") {
+              dispatch({
+                type: "FILE_CHANGES",
+                changes: {
+                  files: event.files,
+                  insertions: event.insertions,
+                  deletions: event.deletions,
+                },
+              });
+              return;
+            }
             dispatch({ type: "STREAM_EVENT", taskId, event });
           },
         );

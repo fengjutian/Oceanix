@@ -642,13 +642,59 @@ export interface McpToolDef {
   parameters: Array<{ name: string; type: string; description: string }>;
 }
 
-export async function getMcpTools(): Promise<McpToolDef[]> {
-  // Ensure the Python AI sidecar (HTTP on port 11435) is running
+export interface UserToolDef {
+  name: string;
+  description: string;
+  type: "shell" | "python";
+  code: string;
+  parameters: Array<{ name: string; type: string; description: string }>;
+  source: "global" | "project";
+  builtin: false;
+}
+
+export async function getMcpTools(): Promise<{
+  tools: McpToolDef[];
+  user_tools: UserToolDef[];
+}> {
   await invoke("ai_ensure_running");
   const res = await fetch(`${AI_HTTP}/mcp/tools`);
   if (!res.ok) throw new Error(`Failed to fetch MCP tools: ${res.status}`);
   const data = await res.json();
-  return data.tools ?? [];
+  return {
+    tools: data.tools ?? [],
+    user_tools: data.user_tools ?? [],
+  };
+}
+
+export async function registerUserTool(tool: {
+  name: string;
+  description: string;
+  type: "shell" | "python";
+  code: string;
+  parameters: Array<{ name: string; type: string; description: string }>;
+  scope?: "project" | "global";
+}): Promise<UserToolDef> {
+  await invoke("ai_ensure_running");
+  const res = await fetch(`${AI_HTTP}/mcp/tools`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(tool),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(`Failed to register tool: ${(err as any).detail || res.status}`);
+  }
+  const data = await res.json();
+  return data.tool;
+}
+
+export async function removeUserTool(name: string): Promise<void> {
+  await invoke("ai_ensure_running");
+  const res = await fetch(`${AI_HTTP}/mcp/tools/${encodeURIComponent(name)}`, { method: "DELETE" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(`Failed to remove tool: ${(err as any).detail || res.status}`);
+  }
 }
 
 export interface ConvMeta {

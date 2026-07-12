@@ -281,14 +281,13 @@ async def agent_stream(request: Request):
 
 
 @app.get("/mcp/tools")
-async def mcp_tools(request: Request):
+async def mcp_tools():
     """List all registered MCP tools + user-defined tools with metadata."""
     from .server import get_mcp_tool_definitions
     from .tool_registry import get_user_tool_defs
 
-    workspace = request.query_params.get("workspace")
     builtin = get_mcp_tool_definitions()
-    user = get_user_tool_defs(workspace)
+    user = get_user_tool_defs()
 
     return {
         "tools": builtin,
@@ -313,18 +312,16 @@ async def mcp_tools_register(request: Request):
 
     body = await request.json()
     scope = body.get("scope", "project")
-    workspace = body.get("workspace")
-    tool = add_user_tool(body, workspace_root=workspace, scope=scope)
+    tool = add_user_tool(body, scope=scope)
     return {"status": "registered", "tool": tool}
 
 
 @app.delete("/mcp/tools/{tool_name}")
-async def mcp_tools_remove(tool_name: str, request: Request):
+async def mcp_tools_remove(tool_name: str):
     """Remove a user-defined tool by name."""
     from .tool_registry import remove_user_tool
 
-    workspace = request.query_params.get("workspace")
-    ok = remove_user_tool(tool_name, workspace_root=workspace)
+    ok = remove_user_tool(tool_name)
     if not ok:
         raise HTTPException(status_code=404, detail=f"Tool '{tool_name}' not found")
     return {"status": "removed", "name": tool_name}

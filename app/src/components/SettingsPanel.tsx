@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { loadSettings, saveSettings, getMcpTools, type EditorSettings, type McpToolDef } from "../services/api";
+import { loadSettings, saveSettings, getMcpTools, registerUserTool, removeUserTool, type EditorSettings, type McpToolDef, type UserToolDef } from "../services/api";
 import { DARK_THEME, LIGHT_THEME, applyTheme } from "@oceanix/theme";
 import { Search } from "lucide-react";
 import { useLocale } from "../i18n/LocaleContext";
@@ -69,7 +69,15 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [search, setSearch] = useState("");
   const [activeGroup, setActiveGroup] = useState("Appearance");
   const [mcpTools, setMcpTools] = useState<McpToolDef[]>([]);
+  const [userTools, setUserTools] = useState<UserToolDef[]>([]);
   const [mcpToolsLoading, setMcpToolsLoading] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newTool, setNewTool] = useState({
+    name: "", description: "", type: "shell" as "shell" | "python",
+    code: "", scope: "project" as "project" | "global",
+    paramsStr: "", // comma-separated "name:type:desc"
+  });
+  const [toolError, setToolError] = useState("");
 
   const settingGroups = useMemo(() => getSettingGroups(t as (key: string) => string), [t]);
 
@@ -80,8 +88,11 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
   useEffect(() => {
     setMcpToolsLoading(true);
     getMcpTools()
-      .then((tools) => setMcpTools(tools))
-      .catch(() => setMcpTools([]))
+      .then((result) => {
+        setMcpTools(result.tools);
+        setUserTools(result.user_tools);
+      })
+      .catch(() => { setMcpTools([]); setUserTools([]); })
       .finally(() => setMcpToolsLoading(false));
   }, []);
 
@@ -98,6 +109,48 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
   const filtered = search.trim()
     ? allSettings.filter((s) => s.label.toLowerCase().includes(search.toLowerCase()) || s.key.toLowerCase().includes(search.toLowerCase()))
     : settingGroups[activeGroup] || [];
+
+  const handleAddTool = async () => {
+    setToolError("");
+    if (!newTool.name.trim() || !newTool.code.trim()) {
+      setToolError("Name and code are required.");
+      return;
+    }
+    // Parse params: "name:type:desc,name2:type:desc"
+    const parameters = newTool.paramsStr
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const [name, type, ...desc] = part.split(":");
+        return { name: name.trim(), type: (type || "str").trim(), description: desc.join(":").trim() };
+      });
+
+    try {
+      const created = await registerUserTool({
+        name: newTool.name.trim(),
+        description: newTool.description.trim(),
+        type: newTool.type,
+        code: newTool.code,
+        parameters,
+        scope: newTool.scope,
+      });
+      setUserTools((prev) => [...prev.filter((t) => t.name !== created.name), created]);
+      setShowAddForm(false);
+      setNewTool({ name: "", description: "", type: "shell", code: "", scope: "project", paramsStr: "" });
+    } catch (e: any) {
+      setToolError(e.message);
+    }
+  };
+
+  const handleDeleteTool = async (name: string) => {
+    try {
+      await removeUserTool(name);
+      setUserTools((prev) => prev.filter((t) => t.name !== name));
+    } catch (e: any) {
+      setToolError(e.message);
+    }
+  };
 
   if (!loaded) return <div style={{ padding: 12, color: "var(--text-secondary)" }}>{t("sidebar.loading")}</div>;
 
@@ -170,44 +223,184 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
           {activeGroup === "MCP Tools" && !search.trim() ? (
             mcpToolsLoading ? (
               <div style={{ padding: 16, color: "var(--text-secondary)", fontSize: 13 }}>{t("sidebar.loading")}</div>
-            ) : mcpTools.length === 0 ? (
+            ) : (mcpTools.length === 0 && userTools.length === 0) ? (
               <div style={{ padding: 16, color: "var(--text-secondary)", fontSize: 13 }}>
                 {t("settings.mcpTools.unavailable")}
               </div>
             ) : (
-              mcpTools.map((tool) => (
-                <div key={tool.name} style={{
-                  padding: "12px 16px", borderBottom: "1px solid var(--border-color)",
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <code style={{
-                      background: "var(--bg-tertiary)", padding: "1px 6px", borderRadius: 3,
-                      fontSize: 12, color: "var(--accent-color, #4fc1ff)", fontFamily: "var(--font-mono)",
-                    }}>
-                      {tool.name}
-                    </code>
-                  </div>
-                  <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8, lineHeight: 1.5 }}>
-                    {tool.description}
-                  </div>
-                  {tool.parameters.length > 0 && (
-                    <div style={{
-                      background: "var(--bg-tertiary)", borderRadius: 4, padding: "6px 10px",
-                      fontSize: 12, fontFamily: "var(--font-mono)",
-                    }}>
-                      {tool.parameters.map((p, i) => (
-                        <div key={p.name} style={{
-                          color: "var(--text-secondary)", marginTop: i > 0 ? 2 : 0,
-                        }}>
-                          <span style={{ color: "var(--accent-color, #4fc1ff)" }}>{p.name}</span>
-                          <span style={{ color: "var(--text-tertiary, #888)" }}>: {p.type}</span>
-                          <span style={{ marginLeft: 8, color: "var(--text-secondary)" }}>— {p.description}</span>
-                        </div>
-                      ))}
+              <div>
+                {/* Tool list */}
+                {mcpTools.map((tool) => (
+                  <div key={tool.name} style={{
+                    padding: "12px 16px", borderBottom: "1px solid var(--border-color)",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                      <code style={{
+                        background: "var(--bg-tertiary)", padding: "1px 6px", borderRadius: 3,
+                        fontSize: 12, color: "var(--accent-color, #4fc1ff)", fontFamily: "var(--font-mono)",
+                      }}>
+                        {tool.name}
+                      </code>
+                      <span style={{ fontSize: 10, color: "var(--text-tertiary, #888)", background: "var(--bg-tertiary)", padding: "0 4px", borderRadius: 2 }}>
+                        built-in
+                      </span>
                     </div>
-                  )}
-                </div>
-              ))
+                    <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8, lineHeight: 1.5 }}>
+                      {tool.description}
+                    </div>
+                    {tool.parameters.length > 0 && (
+                      <div style={{
+                        background: "var(--bg-tertiary)", borderRadius: 4, padding: "6px 10px",
+                        fontSize: 12, fontFamily: "var(--font-mono)",
+                      }}>
+                        {tool.parameters.map((p, i) => (
+                          <div key={p.name} style={{ color: "var(--text-secondary)", marginTop: i > 0 ? 2 : 0 }}>
+                            <span style={{ color: "var(--accent-color, #4fc1ff)" }}>{p.name}</span>
+                            <span style={{ color: "var(--text-tertiary, #888)" }}>: {p.type}</span>
+                            <span style={{ marginLeft: 8, color: "var(--text-secondary)" }}>— {p.description}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* User tools */}
+                {userTools.map((tool) => (
+                  <div key={tool.name} style={{
+                    padding: "12px 16px", borderBottom: "1px solid var(--border-color)",
+                    borderLeft: "3px solid #4fc1ff",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <code style={{
+                          background: "var(--bg-tertiary)", padding: "1px 6px", borderRadius: 3,
+                          fontSize: 12, color: "#4fc1ff", fontFamily: "var(--font-mono)",
+                        }}>
+                          {tool.name}
+                        </code>
+                        <span style={{ fontSize: 10, color: "var(--text-tertiary)", background: "var(--bg-tertiary)", padding: "0 4px", borderRadius: 2 }}>
+                          {tool.type}
+                        </span>
+                        <span style={{ fontSize: 10, color: "var(--text-tertiary)", background: "var(--bg-tertiary)", padding: "0 4px", borderRadius: 2 }}>
+                          {tool.source}
+                        </span>
+                      </div>
+                      <button onClick={() => handleDeleteTool(tool.name)} style={{
+                        background: "none", border: "none", color: "var(--text-secondary)",
+                        cursor: "pointer", fontSize: 14, padding: "2px 6px", borderRadius: 3,
+                      }} title={t("settings.mcpTools.delete")}>
+                        ×
+                      </button>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8, lineHeight: 1.5 }}>
+                      {tool.description}
+                    </div>
+                    {tool.parameters.length > 0 && (
+                      <div style={{
+                        background: "var(--bg-tertiary)", borderRadius: 4, padding: "6px 10px",
+                        fontSize: 12, fontFamily: "var(--font-mono)",
+                      }}>
+                        {tool.parameters.map((p, i) => (
+                          <div key={p.name} style={{ color: "var(--text-secondary)", marginTop: i > 0 ? 2 : 0 }}>
+                            <span style={{ color: "var(--accent-color, #4fc1ff)" }}>{p.name}</span>
+                            <span style={{ color: "var(--text-tertiary, #888)" }}>: {p.type}</span>
+                            <span style={{ marginLeft: 8, color: "var(--text-secondary)" }}>— {p.description}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <details style={{ marginTop: 6 }}>
+                      <summary style={{ fontSize: 11, color: "var(--text-tertiary)", cursor: "pointer" }}>
+                        {t("settings.mcpTools.showCode")}
+                      </summary>
+                      <pre style={{
+                        margin: "4px 0 0", padding: "6px 8px", background: "var(--bg-tertiary)",
+                        borderRadius: 4, fontSize: 11, overflow: "auto", maxHeight: 120,
+                        color: "var(--text-secondary)",
+                      }}>{tool.code}</pre>
+                    </details>
+                  </div>
+                ))}
+
+                {/* Add Tool Form */}
+                {showAddForm && (
+                  <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border-color)" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 8 }}>
+                      {t("settings.mcpTools.newTool")}
+                    </div>
+                    {toolError && (
+                      <div style={{ color: "#f44747", fontSize: 12, marginBottom: 8 }}>{toolError}</div>
+                    )}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input
+                          style={{ ...inputStyle, flex: 1 }}
+                          placeholder={t("settings.mcpTools.namePlaceholder")}
+                          value={newTool.name}
+                          onChange={(e) => setNewTool({ ...newTool, name: e.target.value })}
+                        />
+                        <select
+                          value={newTool.type}
+                          onChange={(e) => setNewTool({ ...newTool, type: e.target.value as "shell" | "python" })}
+                          style={{ ...inputStyle, width: 100 }}
+                        >
+                          <option value="shell">Shell</option>
+                          <option value="python">Python</option>
+                        </select>
+                        <select
+                          value={newTool.scope}
+                          onChange={(e) => setNewTool({ ...newTool, scope: e.target.value as "project" | "global" })}
+                          style={{ ...inputStyle, width: 100 }}
+                        >
+                          <option value="project">{t("settings.mcpTools.scopeProject")}</option>
+                          <option value="global">{t("settings.mcpTools.scopeGlobal")}</option>
+                        </select>
+                      </div>
+                      <input
+                        style={inputStyle}
+                        placeholder={t("settings.mcpTools.descPlaceholder")}
+                        value={newTool.description}
+                        onChange={(e) => setNewTool({ ...newTool, description: e.target.value })}
+                      />
+                      <textarea
+                        style={{ ...inputStyle, minHeight: 60, resize: "vertical", fontFamily: "var(--font-mono)" }}
+                        placeholder={newTool.type === "shell" ? 'echo "Hello {name}"' : 'def run(name: str) -> str:\n    return f"Hello {name}"'}
+                        value={newTool.code}
+                        onChange={(e) => setNewTool({ ...newTool, code: e.target.value })}
+                      />
+                      <input
+                        style={inputStyle}
+                        placeholder={t("settings.mcpTools.paramsPlaceholder")}
+                        value={newTool.paramsStr}
+                        onChange={(e) => setNewTool({ ...newTool, paramsStr: e.target.value })}
+                      />
+                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                        <button onClick={() => { setShowAddForm(false); setToolError(""); }}
+                          style={{ ...btnStyle, background: "var(--bg-tertiary)" }}>
+                          {t("settings.mcpTools.cancel")}
+                        </button>
+                        <button onClick={handleAddTool} style={btnStyle}>
+                          {t("settings.mcpTools.save")}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Add button */}
+                {!showAddForm && (
+                  <div style={{ padding: "8px 16px" }}>
+                    <button onClick={() => setShowAddForm(true)} style={{
+                      background: "var(--bg-tertiary)", border: "1px dashed var(--border-color)",
+                      color: "var(--text-secondary)", padding: "6px 14px", borderRadius: 4,
+                      cursor: "pointer", fontSize: 12, width: "100%",
+                    }}>
+                      + {t("settings.mcpTools.addTool")}
+                    </button>
+                  </div>
+                )}
+              </div>
             )
           ) : (
             /* Standard settings rendering */
@@ -270,4 +463,9 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
 const inputStyle: React.CSSProperties = {
   background: "var(--bg-tertiary)", color: "var(--text-primary)",
   border: "1px solid var(--border-color)", borderRadius: 4, padding: "4px 8px", fontSize: 13, outline: "none",
+};
+
+const btnStyle: React.CSSProperties = {
+  background: "var(--accent-color, #4fc1ff)", color: "#fff",
+  border: "none", borderRadius: 4, padding: "4px 12px", fontSize: 12, cursor: "pointer",
 };

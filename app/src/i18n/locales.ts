@@ -173,6 +173,17 @@ export interface LocaleStrings {
   // ── MCP Tools ──────────────────────────────────
   "settings.group.mcpTools": string;
   "settings.mcpTools.unavailable": string;
+  "settings.mcpTools.delete": string;
+  "settings.mcpTools.addTool": string;
+  "settings.mcpTools.newTool": string;
+  "settings.mcpTools.namePlaceholder": string;
+  "settings.mcpTools.descPlaceholder": string;
+  "settings.mcpTools.paramsPlaceholder": string;
+  "settings.mcpTools.showCode": string;
+  "settings.mcpTools.cancel": string;
+  "settings.mcpTools.save": string;
+  "settings.mcpTools.scopeProject": string;
+  "settings.mcpTools.scopeGlobal": string;
 
   // ── Common ─────────────────────────────────────
   "common.justNow": string;
@@ -348,6 +359,17 @@ const en: LocaleStrings = {
   // MCP Tools
   "settings.group.mcpTools": "MCP Tools",
   "settings.mcpTools.unavailable": "MCP tools are not available. Ensure the AI sidecar is running.",
+  "settings.mcpTools.delete": "Remove tool",
+  "settings.mcpTools.addTool": "Add custom tool",
+  "settings.mcpTools.newTool": "New Tool",
+  "settings.mcpTools.namePlaceholder": "Tool name (e.g. my_script)",
+  "settings.mcpTools.descPlaceholder": "Description of what this tool does",
+  "settings.mcpTools.paramsPlaceholder": 'Parameters: "name:str:desc, path:str:file path"',
+  "settings.mcpTools.showCode": "Show code",
+  "settings.mcpTools.cancel": "Cancel",
+  "settings.mcpTools.save": "Save",
+  "settings.mcpTools.scopeProject": "Project",
+  "settings.mcpTools.scopeGlobal": "Global",
 
   // Common
   "common.justNow": "Just now",
@@ -523,6 +545,17 @@ const zh: LocaleStrings = {
   // MCP Tools
   "settings.group.mcpTools": "MCP 工具",
   "settings.mcpTools.unavailable": "MCP 工具不可用，请确保 AI 侧车正在运行。",
+  "settings.mcpTools.delete": "移除工具",
+  "settings.mcpTools.addTool": "添加自定义工具",
+  "settings.mcpTools.newTool": "新建工具",
+  "settings.mcpTools.namePlaceholder": "工具名 (如 my_script)",
+  "settings.mcpTools.descPlaceholder": "工具功能描述",
+  "settings.mcpTools.paramsPlaceholder": "参数: \"name:str:描述, path:str:文件路径\"",
+  "settings.mcpTools.showCode": "查看代码",
+  "settings.mcpTools.cancel": "取消",
+  "settings.mcpTools.save": "保存",
+  "settings.mcpTools.scopeProject": "项目",
+  "settings.mcpTools.scopeGlobal": "全局",
 
   // Common
   "common.justNow": "刚刚",

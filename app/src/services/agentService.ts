@@ -1,7 +1,13 @@
-import { useState, useReducer, useCallback } from "react";
+import { useState, useReducer, useCallback, useEffect, useRef } from "react";
 import type { AgentTask, AgentStep } from "@oceanix/agent-workspace";
 import { agentExecuteStreaming } from "./api";
 import type { AgentStreamEvent } from "./api";
+import {
+  type AgentSession,
+  loadSessions,
+  saveSessions,
+  createSession as newSession,
+} from "./agentPersistence";
 
 // ─── Pure stream event reducer ──────────────────────
 // Applies a single AgentStreamEvent to an AgentTask, returning the updated task.
@@ -84,39 +90,86 @@ export function applyStreamEvent(task: AgentTask, event: AgentStreamEvent): Agen
 // ─── Internal reducer for useAgentService ────────────
 
 interface AgentState {
-  tasks: AgentTask[];
+  sessions: AgentSession[];
+  activeSessionId: string;
   activeTaskId: string | null;
   running: boolean;
 }
 
 type AgentAction =
+  | { type: "LOAD_SESSIONS"; sessions: AgentSession[] }
+  | { type: "ADD_SESSION"; session: AgentSession }
+  | { type: "SWITCH_SESSION"; sessionId: string }
+  | { type: "DELETE_SESSION"; sessionId: string }
   | { type: "ADD_TASK"; task: AgentTask }
   | { type: "STREAM_EVENT"; taskId: string; event: AgentStreamEvent }
   | { type: "SET_ACTIVE"; taskId: string | null }
   | { type: "TASK_ERROR"; taskId: string; error: string }
   | { type: "SET_RUNNING"; running: boolean };
 
+function updateActiveSession(state: AgentState, updater: (session: AgentSession) => AgentSession): AgentState {
+  return {
+    ...state,
+    sessions: state.sessions.map((s) =>
+      s.id === state.activeSessionId ? updater(s) : s,
+    ),
+  };
+}
+
 function agentReducer(state: AgentState, action: AgentAction): AgentState {
   switch (action.type) {
-    case "ADD_TASK":
+    case "LOAD_SESSIONS":
       return {
         ...state,
-        tasks: [...state.tasks, action.task],
-        activeTaskId: action.task.id,
+        sessions: action.sessions,
+        activeSessionId: action.sessions.length > 0
+          ? action.sessions[0].id
+          : state.activeSessionId,
       };
-    case "STREAM_EVENT":
+    case "ADD_SESSION":
       return {
         ...state,
-        tasks: state.tasks.map((t) =>
+        sessions: [action.session, ...state.sessions],
+        activeSessionId: action.session.id,
+        activeTaskId: null,
+      };
+    case "SWITCH_SESSION":
+      return {
+        ...state,
+        activeSessionId: action.sessionId,
+        activeTaskId: state.sessions.find((s) => s.id === action.sessionId)?.tasks[0]?.id ?? null,
+      };
+    case "DELETE_SESSION": {
+      const remaining = state.sessions.filter((s) => s.id !== action.sessionId);
+      return {
+        ...state,
+        sessions: remaining,
+        activeSessionId: state.activeSessionId === action.sessionId
+          ? (remaining[0]?.id ?? state.activeSessionId)
+          : state.activeSessionId,
+        activeTaskId: state.activeSessionId === action.sessionId
+          ? (remaining[0]?.tasks[0]?.id ?? null)
+          : state.activeTaskId,
+      };
+    }
+    case "ADD_TASK":
+      return updateActiveSession(state, (s) => ({
+        ...s,
+        tasks: [...s.tasks, action.task],
+      }));
+    case "STREAM_EVENT":
+      return updateActiveSession(state, (s) => ({
+        ...s,
+        tasks: s.tasks.map((t) =>
           t.id === action.taskId ? applyStreamEvent(t, action.event) : t,
         ),
-      };
+      }));
     case "SET_ACTIVE":
       return { ...state, activeTaskId: action.taskId };
     case "TASK_ERROR":
-      return {
-        ...state,
-        tasks: state.tasks.map((t) =>
+      return updateActiveSession(state, (s) => ({
+        ...s,
+        tasks: s.tasks.map((t) =>
           t.id === action.taskId
             ? {
                 ...t,
@@ -132,10 +185,14 @@ function agentReducer(state: AgentState, action: AgentAction): AgentState {
               }
             : t,
         ),
-      };
+      }));
     case "SET_RUNNING":
       return { ...state, running: action.running };
   }
+}
+
+function getActiveSession(state: AgentState): AgentSession | undefined {
+  return state.sessions.find((s) => s.id === state.activeSessionId);
 }
 
 // ─── Hook ────────────────────────────────────────────
@@ -143,20 +200,58 @@ function agentReducer(state: AgentState, action: AgentAction): AgentState {
 export function useAgentService() {
   const [input, setInput] = useState("");
   const [state, dispatch] = useReducer(agentReducer, {
-    tasks: [],
+    sessions: [],
+    activeSessionId: "",
     activeTaskId: null,
     running: false,
   });
+
+  // Load persisted sessions on mount
+  const loadedRef = useRef(false);
+  useEffect(() => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+    const saved = loadSessions();
+    if (saved.length > 0) {
+      dispatch({ type: "LOAD_SESSIONS", sessions: saved });
+    } else {
+      // Create a fresh default session
+      const session = newSession();
+      dispatch({ type: "ADD_SESSION", session });
+    }
+  }, []);
+
+  // Persist whenever sessions change (skip initial load)
+  const sessionsRef = useRef(state.sessions);
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    sessionsRef.current = state.sessions;
+    const id = setTimeout(() => saveSessions(sessionsRef.current), 300);
+    return () => clearTimeout(id);
+  }, [state.sessions]);
 
   const setActiveTaskId = useCallback(
     (id: string | null) => dispatch({ type: "SET_ACTIVE", taskId: id }),
     [],
   );
 
+  const createSession = useCallback((title?: string) => {
+    const session = newSession(title);
+    dispatch({ type: "ADD_SESSION", session });
+  }, []);
+
+  const switchSession = useCallback((sessionId: string) => {
+    dispatch({ type: "SWITCH_SESSION", sessionId });
+  }, []);
+
+  const deleteSession = useCallback((sessionId: string) => {
+    dispatch({ type: "DELETE_SESSION", sessionId });
+  }, []);
+
   const execute = useCallback(
     async (task: string) => {
       const trimmed = task.trim();
-      if (!trimmed || state.running) return;
+      if (!trimmed || state.running || !state.activeSessionId) return;
 
       const taskId = `task-${Date.now()}`;
       const newTask: AgentTask = {
@@ -167,6 +262,7 @@ export function useAgentService() {
       };
 
       dispatch({ type: "ADD_TASK", task: newTask });
+      dispatch({ type: "SET_ACTIVE", taskId });
       dispatch({ type: "SET_RUNNING", running: true });
 
       try {
@@ -182,16 +278,29 @@ export function useAgentService() {
         dispatch({ type: "SET_RUNNING", running: false });
       }
     },
-    [state.running],
+    [state.running, state.activeSessionId],
   );
 
+  const activeSession = getActiveSession(state);
+
   return {
-    tasks: state.tasks,
+    // Session level
+    sessions: state.sessions,
+    activeSessionId: state.activeSessionId,
+    activeSession,
+    createSession,
+    switchSession,
+    deleteSession,
+
+    // Task level (from active session)
+    tasks: activeSession?.tasks || [],
     activeTaskId: state.activeTaskId,
-    running: state.running,
     setActiveTaskId,
+
+    // Execution
     input,
     setInput,
     execute,
+    running: state.running,
   };
 }

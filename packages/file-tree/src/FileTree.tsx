@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { ChevronDown, ChevronRight, File, FileCode2, FileJson, FileText, FileImage, FileSpreadsheet, FileTerminal, FileLock, FileType2, Folder, FolderOpen, Loader2, ChevronsUpDown } from "lucide-react";
+import { ChevronDown, ChevronRight, File, FileText, FileImage, FileSpreadsheet, FileTerminal, FileLock, FileType2, Folder, FolderOpen, FolderCode, FolderCog, FolderGit, FolderKey, FolderHeart, Loader2, ChevronsUpDown, Code2, Braces, Bug, Database, Globe, Palette, Package, Puzzle, Server, Settings2, Shield, TestTube, Zap, Box, FileVolume, Gem, Coffee, BookOpen, Container, Archive, FileClock, FileSignature } from "lucide-react";
 import type { FileNode, FileTreeProps } from "./types";
 import type { LucideIcon } from "lucide-react";
 
@@ -32,60 +32,365 @@ const TREE = {
 };
 
 // ---------------------------------------------------------------------------
-// File-type → icon mapping (extensions without dot, lowercase)
+// VS Code Seti–inspired icon mapping with colors
 // ---------------------------------------------------------------------------
 
-function fileIcon(extension: string | undefined, fileName: string): LucideIcon {
-  const specialFiles: Record<string, LucideIcon> = {
-    "dockerfile": FileTerminal,
-    "makefile": FileTerminal,
-    "license": FileText,
-    "readme.md": FileText,
-    ".gitignore": FileLock,
-    ".env": FileLock,
-    ".env.local": FileLock,
-    "package-lock.json": FileLock,
-    "pnpm-lock.yaml": FileLock,
-    "yarn.lock": FileLock,
-    "cargo.lock": FileLock,
+interface IconMeta {
+  icon: LucideIcon;
+  color: string;
+}
+
+// Seti-inspired color palette
+const SETI = {
+  blue:        "#519aba",
+  green:       "#8dc149",
+  orange:      "#e37926",
+  purple:      "#a074c4",
+  red:         "#cc3e44",
+  yellow:      "#cbcb41",
+  pink:        "#f55385",
+  cyan:        "#4dbed4",
+  grey:        "#6d8086",
+  lime:        "#a2cc3c",
+  brown:       "#c07744",
+  white:       "#d4d7d6",
+  violet:      "#b180c7",
+  teal:        "#519aba",
+  mustard:     "#cbcb41",
+  rust:        "#cc3e44",
+};
+
+/**
+ * Map a directory name to a specialized folder icon (matching VSCode Seti).
+ */
+function folderIcon(dirName: string, expanded: boolean): IconMeta {
+  const lower = dirName.toLowerCase();
+
+  // Source / code folders
+  if (/^(src|source|sources|lib|app)$/.test(lower))
+    return { icon: expanded ? FolderCode : FolderCode, color: SETI.blue };
+  // Test folders
+  if (/^(test|tests|spec|specs|__tests__|__mocks__|__fixtures__|e2e|integration)$/.test(lower))
+    return { icon: expanded ? FolderHeart : FolderHeart, color: SETI.green };
+  // Config folders
+  if (/^(config|configs|configuration|\.config|settings)$/.test(lower))
+    return { icon: expanded ? FolderCog : FolderCog, color: SETI.grey };
+  // Git folders
+  if (/^(\.github|\.git)$/.test(lower))
+    return { icon: expanded ? FolderGit : FolderGit, color: SETI.grey };
+  // Secret/key folders
+  if (/^(secrets|keys|certs|certificates|\.ssh)$/.test(lower))
+    return { icon: expanded ? FolderKey : FolderKey, color: SETI.orange };
+  // Components
+  if (/^(components?|widgets|ui|elements|views|pages|layouts|modules)$/.test(lower))
+    return { icon: expanded ? Box : Box, color: SETI.purple };
+  // Hooks
+  if (/^(hooks?|composables|middleware|plugins?|services?|stores?|utils?|helpers?|lib)$/.test(lower))
+    return { icon: expanded ? Puzzle : Puzzle, color: SETI.yellow };
+  // Styles
+  if (/^(styles?|css|scss|sass|less|themes?|theme)$/.test(lower))
+    return { icon: expanded ? Palette : Palette, color: SETI.pink };
+  // Assets
+  if (/^(assets?|public|static|images?|img|media|icons?|fonts?|svg)$/.test(lower))
+    return { icon: expanded ? Gem : Gem, color: SETI.orange };
+  // Documentation
+  if (/^(docs?|documentation|wiki|guides?|examples?|samples?)$/.test(lower))
+    return { icon: expanded ? BookOpen : BookOpen, color: SETI.blue };
+  // Build / dist
+  if (/^(dist|build|out|output|\.next|\.nuxt|target)$/.test(lower))
+    return { icon: expanded ? Archive : Archive, color: SETI.grey };
+  // Database
+  if (/^(db|database|migrations?|prisma|models?|schemas?)$/.test(lower))
+    return { icon: expanded ? Database : Database, color: SETI.cyan };
+  // API
+  if (/^(api|apis|routes?|endpoints?|graphql)$/.test(lower))
+    return { icon: expanded ? Server : Server, color: SETI.purple };
+  // i18n / locales
+  if (/^(i18n|locales?|translations?|lang|languages?)$/.test(lower))
+    return { icon: expanded ? Globe : Globe, color: SETI.blue };
+  // Docker / container
+  if (/^(docker|containers?|k8s|kubernetes)$/.test(lower))
+    return { icon: expanded ? Container : Container, color: SETI.blue };
+  // Node modules
+  if (lower === "node_modules")
+    return { icon: expanded ? FolderCode : FolderCode, color: SETI.grey };
+
+  // Default folder
+  return { icon: expanded ? FolderOpen : Folder, color: SETI.yellow };
+}
+
+/**
+ * Map a file (by name + extension) to an icon + color, VSCode Seti style.
+ */
+function fileIcon(fileName: string, extension?: string): IconMeta {
+  const lower = fileName.toLowerCase();
+
+  // ─── Special filenames (full match) ──────────────────────────
+  const exactFileIcons: Record<string, IconMeta> = {
+    // Package managers
+    "package.json":        { icon: Package,     color: SETI.red },
+    "package-lock.json":   { icon: Package,     color: SETI.grey },
+    "yarn.lock":           { icon: Package,     color: SETI.grey },
+    "pnpm-lock.yaml":      { icon: Package,     color: SETI.grey },
+    "pnpm-workspace.yaml": { icon: Package,     color: SETI.grey },
+    "cargo.toml":          { icon: Package,     color: SETI.rust },
+    "cargo.lock":          { icon: Package,     color: SETI.grey },
+    "composer.json":       { icon: Package,     color: SETI.yellow },
+    "gemfile":             { icon: Gem,         color: SETI.red },
+
+    // TypeScript config
+    "tsconfig.json":       { icon: Braces,      color: SETI.blue },
+    "tsconfig.node.json":  { icon: Braces,      color: SETI.blue },
+    "jsconfig.json":       { icon: Braces,      color: SETI.yellow },
+
+    // Build tools / bundlers
+    "vite.config.ts":      { icon: Zap,         color: SETI.purple },
+    "vite.config.js":      { icon: Zap,         color: SETI.yellow },
+    "webpack.config.js":   { icon: Box,         color: SETI.blue },
+    "rollup.config.js":    { icon: Box,         color: SETI.orange },
+    "turbo.json":          { icon: Zap,         color: SETI.purple },
+    "lerna.json":          { icon: Package,     color: SETI.purple },
+    "nx.json":             { icon: Puzzle,      color: SETI.blue },
+
+    // Linters / Formatters
+    "eslint.config.js":    { icon: Shield,      color: SETI.purple },
+    "eslint.config.mjs":   { icon: Shield,      color: SETI.purple },
+    ".eslintrc.js":        { icon: Shield,      color: SETI.purple },
+    ".eslintrc.json":      { icon: Shield,      color: SETI.purple },
+    ".eslintrc.yaml":      { icon: Shield,      color: SETI.purple },
+    ".eslintrc":           { icon: Shield,      color: SETI.purple },
+    ".eslintignore":       { icon: Shield,      color: SETI.grey },
+    ".prettierrc":         { icon: Palette,     color: SETI.pink },
+    ".prettierrc.json":    { icon: Palette,     color: SETI.pink },
+    ".prettierrc.js":      { icon: Palette,     color: SETI.pink },
+    ".prettierrc.yaml":    { icon: Palette,     color: SETI.pink },
+    "prettier.config.js":  { icon: Palette,     color: SETI.pink },
+    ".prettierignore":     { icon: Palette,     color: SETI.grey },
+    ".stylelintrc":        { icon: Palette,     color: SETI.pink },
+
+    // Testing
+    "jest.config.js":      { icon: TestTube,    color: SETI.green },
+    "jest.config.ts":      { icon: TestTube,    color: SETI.green },
+    "vitest.config.ts":    { icon: TestTube,    color: SETI.green },
+    "vitest.config.js":    { icon: TestTube,    color: SETI.green },
+    "playwright.config.ts":{ icon: Bug,         color: SETI.green },
+    "playwright.config.js":{ icon: Bug,         color: SETI.green },
+    "cypress.config.ts":   { icon: Bug,         color: SETI.green },
+    "cypress.config.js":   { icon: Bug,         color: SETI.green },
+
+    // Babel
+    "babel.config.js":     { icon: Braces,      color: SETI.yellow },
+    "babel.config.json":   { icon: Braces,      color: SETI.yellow },
+    ".babelrc":            { icon: Braces,      color: SETI.yellow },
+    ".babelrc.json":       { icon: Braces,      color: SETI.yellow },
+
+    // Tailwind / PostCSS
+    "tailwind.config.ts":  { icon: Palette,     color: SETI.cyan },
+    "tailwind.config.js":  { icon: Palette,     color: SETI.cyan },
+    "postcss.config.js":   { icon: Palette,     color: SETI.purple },
+    "postcss.config.mjs":  { icon: Palette,     color: SETI.purple },
+
+    // Docker
+    "dockerfile":          { icon: Container,   color: SETI.blue },
+    "docker-compose.yml":  { icon: Container,   color: SETI.blue },
+    "docker-compose.yaml": { icon: Container,   color: SETI.blue },
+    ".dockerignore":       { icon: Container,   color: SETI.grey },
+
+    // CI / CD
+    ".travis.yml":         { icon: Settings2,   color: SETI.orange },
+    ".circleci/config.yml":{ icon: Settings2,   color: SETI.orange },
+    "jenkinsfile":         { icon: Settings2,   color: SETI.orange },
+
+    // Project docs
+    "readme.md":           { icon: BookOpen,    color: SETI.blue },
+    "readme":              { icon: BookOpen,    color: SETI.blue },
+    "changelog.md":        { icon: FileClock,   color: SETI.blue },
+    "changelog":           { icon: FileClock,   color: SETI.blue },
+    "contributing.md":     { icon: BookOpen,    color: SETI.blue },
+    "code_of_conduct.md":  { icon: BookOpen,    color: SETI.blue },
+    "security.md":         { icon: Shield,      color: SETI.red },
+
+    // License
+    "license":             { icon: FileSignature, color: SETI.yellow },
+    "license.md":          { icon: FileSignature, color: SETI.yellow },
+    "licence":             { icon: FileSignature, color: SETI.yellow },
+
+    // Git
+    ".gitignore":          { icon: FolderGit,   color: SETI.grey },
+    ".gitattributes":      { icon: FolderGit,   color: SETI.grey },
+    ".gitmodules":         { icon: FolderGit,   color: SETI.grey },
+    ".gitkeep":            { icon: FolderGit,   color: SETI.grey },
+
+    // Environment
+    ".env":                { icon: FileLock,    color: SETI.yellow },
+    ".env.local":          { icon: FileLock,    color: SETI.yellow },
+    ".env.development":    { icon: FileLock,    color: SETI.yellow },
+    ".env.production":     { icon: FileLock,    color: SETI.yellow },
+    ".env.test":           { icon: FileLock,    color: SETI.yellow },
+    ".env.example":        { icon: FileLock,    color: SETI.grey },
+
+    // Editor / IDE
+    ".editorconfig":       { icon: Settings2,   color: SETI.grey },
+
+    // Build
+    "makefile":            { icon: Settings2,   color: SETI.orange },
+    "gnumakefile":         { icon: Settings2,   color: SETI.orange },
+
+    // Lock files
+    // (pnpm-lock.yaml, cargo.toml, cargo.lock, package-lock, yarn.lock — already covered above)
+
+    // Other configs
+    "vercel.json":         { icon: Globe,       color: SETI.grey },
+    "netlify.toml":        { icon: Globe,       color: SETI.cyan },
+    "fly.toml":            { icon: Globe,       color: SETI.purple },
+    "wrangler.toml":       { icon: Globe,       color: SETI.orange },
+    "cloudbuild.yaml":     { icon: Globe,       color: SETI.blue },
+
+    // Rust specific
+    "main.rs":             { icon: Code2,       color: SETI.rust },
+    "lib.rs":              { icon: Code2,       color: SETI.rust },
+    "mod.rs":              { icon: Code2,       color: SETI.rust },
+
+    // Go specific
+    "go.mod":              { icon: Package,     color: SETI.cyan },
+    "go.sum":              { icon: Package,     color: SETI.grey },
   };
-  const key = fileName.toLowerCase();
-  if (specialFiles[key]) return specialFiles[key];
 
-  if (!extension) return File;
+  // Check exact filename match
+  const exact = exactFileIcons[lower];
+  if (exact) return exact;
 
-  const codeExts = new Set([
-    "ts", "tsx", "js", "jsx", "mjs", "cjs", "rs", "go", "py", "java",
-    "c", "cpp", "h", "hpp", "cs", "rb", "swift", "kt", "kts", "scala",
-    "dart", "ex", "exs", "elm", "fs", "fsx", "hs", "lhs", "lua", "nim",
-    "php", "pl", "pm", "r", "sol", "v", "zig",
-  ]);
-  if (codeExts.has(extension)) return FileCode2;
+  // Check prefix patterns (e.g., "tsconfig.*.json")
+  if (/^tsconfig\..+\.json$/.test(lower)) return { icon: Braces, color: SETI.blue };
 
-  const dataExts = new Set(["json", "yaml", "yml", "toml", "xml", "graphql", "gql"]);
-  if (dataExts.has(extension)) return FileJson;
+  // ─── Extension-based mappings ────────────────────────────────
+  if (!extension) return { icon: File, color: SETI.white };
 
-  const styleExts = new Set(["css", "scss", "less", "sass", "styl"]);
-  if (styleExts.has(extension)) return FileType2;
+  const ext = extension.toLowerCase();
 
-  const markupExts = new Set(["html", "htm", "vue", "svelte", "astro", "jinja", "jinja2", "hbs", "ejs", "pug", "jade"]);
-  if (markupExts.has(extension)) return FileType2;
+  // Rust
+  if (ext === "rs") return { icon: Code2, color: SETI.rust };
 
-  const docExts = new Set(["md", "mdx", "txt", "log", "rst", "tex", "wiki"]);
-  if (docExts.has(extension)) return FileText;
+  // Go
+  if (ext === "go") return { icon: Code2, color: SETI.cyan };
 
-  const imgExts = new Set(["png", "jpg", "jpeg", "gif", "svg", "ico", "webp", "bmp", "tiff", "avif"]);
-  if (imgExts.has(extension)) return FileImage;
+  // Python
+  if (ext === "py" || ext === "pyw" || ext === "pyx" || ext === "pxd" || ext === "pxi") return { icon: Code2, color: SETI.blue };
+  if (ext === "ipynb") return { icon: BookOpen, color: SETI.orange };
 
-  const sheetExts = new Set(["csv", "tsv", "xls", "xlsx", "ods"]);
-  if (sheetExts.has(extension)) return FileSpreadsheet;
+  // JavaScript / TypeScript
+  if (ext === "ts" || ext === "mts" || ext === "cts") return { icon: Code2, color: SETI.blue };
+  if (ext === "tsx") return { icon: Code2, color: SETI.blue };
+  if (ext === "js" || ext === "mjs" || ext === "cjs") return { icon: Code2, color: SETI.yellow };
+  if (ext === "jsx") return { icon: Code2, color: SETI.blue };
 
-  const shellExts = new Set(["sh", "bash", "zsh", "fish", "ps1", "psm1", "psd1"]);
-  if (shellExts.has(extension)) return FileTerminal;
+  // Java
+  if (ext === "java" || ext === "class" || ext === "jar") return { icon: Coffee, color: SETI.orange };
+  // Kotlin
+  if (ext === "kt" || ext === "kts") return { icon: Code2, color: SETI.orange };
+  // Scala
+  if (ext === "scala" || ext === "sc") return { icon: Code2, color: SETI.red };
+  // Swift
+  if (ext === "swift") return { icon: Code2, color: SETI.orange };
+  // Dart
+  if (ext === "dart") return { icon: Code2, color: SETI.cyan };
 
-  if (extension === "sql") return FileCode2;
+  // C / C++
+  if (ext === "c" || ext === "h") return { icon: Code2, color: SETI.blue };
+  if (ext === "cpp" || ext === "cc" || ext === "cxx" || ext === "hpp" || ext === "hh" || ext === "hxx") return { icon: Code2, color: SETI.purple };
+  // C#
+  if (ext === "cs" || ext === "csx") return { icon: Code2, color: SETI.blue };
+  // F#
+  if (ext === "fs" || ext === "fsx" || ext === "fsi") return { icon: Code2, color: SETI.blue };
 
-  return File;
+  // Ruby
+  if (ext === "rb" || ext === "erb") return { icon: Gem, color: SETI.red };
+  // PHP
+  if (ext === "php" || ext === "phtml") return { icon: Code2, color: SETI.purple };
+  // Lua
+  if (ext === "lua") return { icon: Code2, color: SETI.blue };
+  // R
+  if (ext === "r" || ext === "rmd" || ext === "rproj") return { icon: Code2, color: SETI.blue };
+  // Perl
+  if (ext === "pl" || ext === "pm") return { icon: Code2, color: SETI.blue };
+  // Elm
+  if (ext === "elm") return { icon: Code2, color: SETI.cyan };
+  // Haskell
+  if (ext === "hs" || ext === "lhs") return { icon: Code2, color: SETI.purple };
+  // Nim
+  if (ext === "nim") return { icon: Code2, color: SETI.yellow };
+  // Zig
+  if (ext === "zig") return { icon: Code2, color: SETI.orange };
+  // Solidity
+  if (ext === "sol") return { icon: Code2, color: SETI.grey };
+  // V
+  if (ext === "v") return { icon: Code2, color: SETI.blue };
+
+  // Elixir
+  if (ext === "ex" || ext === "exs" || ext === "eex" || ext === "leex") return { icon: Code2, color: SETI.purple };
+
+  // JSON
+  if (ext === "json" || ext === "jsonc" || ext === "json5") return { icon: Braces, color: SETI.yellow };
+  // YAML / TOML / XML
+  if (ext === "yaml" || ext === "yml") return { icon: Braces, color: SETI.red };
+  if (ext === "toml") return { icon: Braces, color: SETI.grey };
+  if (ext === "xml" || ext === "xsl" || ext === "xsd" || ext === "svg") return { icon: Braces, color: SETI.orange };
+  if (ext === "graphql" || ext === "gql") return { icon: Braces, color: SETI.pink };
+
+  // Styles
+  if (ext === "css" || ext === "pcss") return { icon: Palette, color: SETI.blue };
+  if (ext === "scss" || ext === "sass") return { icon: Palette, color: SETI.pink };
+  if (ext === "less") return { icon: Palette, color: SETI.blue };
+  if (ext === "styl" || ext === "stylus") return { icon: Palette, color: SETI.green };
+
+  // Markup / Templates
+  if (ext === "html" || ext === "htm") return { icon: Globe, color: SETI.orange };
+  if (ext === "vue") return { icon: Code2, color: SETI.green };
+  if (ext === "svelte") return { icon: Code2, color: SETI.orange };
+  if (ext === "astro") return { icon: Code2, color: SETI.purple };
+  if (ext === "jinja" || ext === "jinja2" || ext === "hbs" || ext === "ejs" || ext === "pug" || ext === "jade") return { icon: Globe, color: SETI.orange };
+
+  // MD / docs
+  if (ext === "md" || ext === "mdx" || ext === "markdown") return { icon: BookOpen, color: SETI.blue };
+  if (ext === "txt" || ext === "log") return { icon: FileText, color: SETI.white };
+  if (ext === "rst" || ext === "tex" || ext === "wiki") return { icon: FileText, color: SETI.blue };
+
+  // Images
+  if (ext === "png" || ext === "jpg" || ext === "jpeg" || ext === "gif" || ext === "ico" || ext === "webp" || ext === "bmp" || ext === "tiff" || ext === "avif" || ext === "svg") return { icon: FileImage, color: SETI.purple };
+
+  // Audio / Video
+  if (ext === "mp3" || ext === "wav" || ext === "ogg" || ext === "flac" || ext === "aac" || ext === "wma") return { icon: FileVolume, color: SETI.purple };
+  if (ext === "mp4" || ext === "webm" || ext === "avi" || ext === "mov" || ext === "mkv" || ext === "wmv") return { icon: FileVolume, color: SETI.purple };
+
+  // Fonts
+  if (ext === "ttf" || ext === "otf" || ext === "woff" || ext === "woff2" || ext === "eot") return { icon: FileType2, color: SETI.red };
+
+  // Archives
+  if (ext === "zip" || ext === "tar" || ext === "gz" || ext === "bz2" || ext === "xz" || ext === "7z" || ext === "rar" || ext === "tgz") return { icon: Archive, color: SETI.grey };
+
+  // Spreadsheets / data
+  if (ext === "csv" || ext === "tsv") return { icon: FileSpreadsheet, color: SETI.green };
+  if (ext === "xls" || ext === "xlsx" || ext === "ods") return { icon: FileSpreadsheet, color: SETI.green };
+
+  // Shell scripts
+  if (ext === "sh" || ext === "bash" || ext === "zsh" || ext === "fish") return { icon: FileTerminal, color: SETI.green };
+  if (ext === "ps1" || ext === "psm1" || ext === "psd1" || ext === "bat" || ext === "cmd") return { icon: FileTerminal, color: SETI.blue };
+
+  // SQL / Database
+  if (ext === "sql" || ext === "sqlite" || ext === "db") return { icon: Database, color: SETI.cyan };
+  if (ext === "prisma") return { icon: Database, color: SETI.purple };
+
+  // Protocol Buffers
+  if (ext === "proto") return { icon: Braces, color: SETI.red };
+
+  // Nix
+  if (ext === "nix") return { icon: Package, color: SETI.blue };
+
+  // Gradle
+  if (ext === "gradle" || ext === "gradle.kts") return { icon: Settings2, color: SETI.cyan };
+
+  // Default
+  return { icon: File, color: SETI.white };
 }
 
 // ---------------------------------------------------------------------------
@@ -317,15 +622,15 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(
       background: isActive ? COLORS.active : undefined,
     };
 
-    const IconComp = isDir
-      ? (expanded ? FolderOpen : Folder)
-      : fileIcon(node.extension, node.name);
+    // Icon + color (VSCode Seti style)
+    const meta: IconMeta = isDir
+      ? folderIcon(node.name, expanded)
+      : fileIcon(node.name, node.extension);
+    const IconComp = meta.icon;
+    const iconColor = meta.color;
     const iconEl = isDir && node.isLoading
-      ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" } as React.CSSProperties} />
-      : <IconComp size={16} />;
-
-    // Add spin keyframe style (attached once on the container, but defined here for simplicity)
-    // We'll inject it in the FileTree root component instead.
+      ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite", color: iconColor } as React.CSSProperties} />
+      : <IconComp size={16} color={iconColor} style={{ flexShrink: 0 }} />;
 
     return (
       <>

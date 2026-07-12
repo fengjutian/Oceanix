@@ -2,7 +2,8 @@ import React, { useState, useCallback, useRef, useEffect, useImperativeHandle, f
 import Editor, { OnMount, DiffEditor } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import WelcomePage from "./WelcomePage";
-import { aiComplete, lspHover, lspDefinition, lspStart, lspDidOpen, lspDidChange, lspRename } from "../services/api";
+import { aiComplete, lspHover, lspDefinition, lspStart, lspDidOpen, lspDidChange, lspRename, lspCompletion, lspReferences, lspFormatting } from "../services/api";
+import type { EditorSettings } from "../services/api";
 
 const LSP_LANGUAGES = new Set(["rust", "python", "typescript", "typescriptreact", "javascript"]);
 
@@ -21,7 +22,7 @@ export interface EditorTab {
 
 export interface EditorTabsHandle {
   toggleMarkdownPreview: () => void;
-  openGitDiff: () => void;
+  openGitDiff: (original?: string) => void;
 }
 
 interface EditorTabsProps {
@@ -33,6 +34,8 @@ interface EditorTabsProps {
   onSave: (id: string) => void;
   editorRef?: React.MutableRefObject<editor.IStandaloneCodeEditor | null>;
   projectRoot?: string;
+  onCursorChange?: (line: number, column: number) => void;
+  editorSettings?: EditorSettings | null;
 }
 
 const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function EditorTabs({
@@ -44,6 +47,8 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
   onSave,
   editorRef,
   projectRoot,
+  onCursorChange,
+  editorSettings,
 }, ref) {
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
@@ -57,6 +62,23 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
     (editorInstance: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
       monacoRef.current = monaco;
       if (editorRef) editorRef.current = editorInstance;
+
+      // Track cursor position for status bar
+      editorInstance.onDidChangeCursorPosition((e) => {
+        onCursorChange?.(e.position.lineNumber, e.position.column);
+      });
+
+      // Apply editor settings
+      if (editorSettings) {
+        editorInstance.updateOptions({
+          fontSize: editorSettings.fontSize,
+          fontFamily: editorSettings.fontFamily,
+          tabSize: editorSettings.tabSize,
+          insertSpaces: editorSettings.insertSpaces,
+          wordWrap: editorSettings.wordWrap,
+          minimap: { enabled: editorSettings.minimap },
+        });
+      }
 
       // Register LSP hover provider (only for languages with LSP support)
       const hoverDisposable = monaco.languages.registerHoverProvider("*", {
@@ -127,6 +149,66 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
       // Store disposables for cleanup and re-registration
       lspDisposablesRef.current.forEach((d) => d.dispose());
       lspDisposablesRef.current = [hoverDisposable, defDisposable, renameDisposable];
+
+      // Register LSP completion provider
+      const compDisposable = monaco.languages.registerCompletionItemProvider("*", {
+        triggerCharacters: ".".split(""),
+        provideCompletionItems: async (model, position) => {
+          const tab = tabs.find((t) => t.id === activeTabId);
+          if (!tab || !isLspLanguage(tab.language)) return { suggestions: [] };
+          try {
+            const items = await lspCompletion(tab.language, tab.path, position.lineNumber - 1, position.column - 1);
+            const monacoKind = [0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25];
+            return {
+              suggestions: items.map((i) => ({
+                label: i.label,
+                kind: i.kind != null ? monacoKind[i.kind] ?? 0 : 0,
+                detail: i.detail,
+                insertText: i.insertText ?? i.label,
+                range: undefined as any,
+              })),
+            };
+          } catch { return { suggestions: [] }; }
+        },
+      });
+
+      // Register LSP references provider
+      const refDisposable = monaco.languages.registerReferenceProvider("*", {
+        provideReferences: async (model, position, _context) => {
+          const tab = tabs.find((t) => t.id === activeTabId);
+          if (!tab || !isLspLanguage(tab.language)) return [];
+          try {
+            const locs = await lspReferences(tab.language, tab.path, position.lineNumber - 1, position.column - 1);
+            return locs.map((l) => ({
+              uri: monaco.Uri.parse(l.uri),
+              range: new monaco.Range(
+                l.rangeStartLine + 1, l.rangeStartChar + 1,
+                l.rangeEndLine + 1, l.rangeEndChar + 1,
+              ),
+            }));
+          } catch { return []; }
+        },
+      });
+
+      // Register LSP document formatting provider
+      const fmtDisposable = monaco.languages.registerDocumentFormattingEditProvider("*", {
+        provideDocumentFormattingEdits: async (model) => {
+          const tab = tabs.find((t) => t.id === activeTabId);
+          if (!tab || !isLspLanguage(tab.language)) return [];
+          try {
+            const edits = await lspFormatting(tab.language, tab.path, 2, true);
+            return edits.map((e) => ({
+              range: new monaco.Range(
+                e.rangeStartLine + 1, e.rangeStartChar + 1,
+                e.rangeEndLine + 1, e.rangeEndChar + 1,
+              ),
+              text: e.newText,
+            }));
+          } catch { return []; }
+        },
+      });
+
+      lspDisposablesRef.current.push(compDisposable, refDisposable, fmtDisposable);
     },
     [editorRef, tabs, activeTabId]
   );
@@ -136,9 +218,9 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
     setShowDiff(false);
   }, []);
 
-  const openGitDiff = useCallback(() => {
+  const openGitDiff = useCallback((original?: string) => {
     if (!activeTab) return;
-    setDiffOriginal("");
+    setDiffOriginal(original ?? "");
     setDiffModified(activeTab.content);
     setShowDiff(true);
     setSplitMode(null);

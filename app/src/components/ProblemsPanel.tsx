@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { lspDiagnostics } from "../services/api";
+import { lspDiagnostics, readFile, readFileBase64 } from "../services/api";
+import type { EditorTab } from "./EditorTabs";
 
 interface Problem {
   severity: "error" | "warning" | "info";
@@ -27,7 +28,7 @@ const SEVERITY_MAP: Record<number, Problem["severity"]> = {
   3: "info",
 };
 
-export default function ProblemsPanel() {
+export default function ProblemsPanel({ onOpenFile }: { onOpenFile?: (tab: EditorTab) => void }) {
   const [problems, setProblems] = useState<Problem[]>([]);
 
   // Poll for LSP diagnostics every 2s
@@ -73,8 +74,44 @@ export default function ProblemsPanel() {
           style={{
             display: "flex", alignItems: "center", gap: 8,
             padding: "2px 8px", borderBottom: "1px solid var(--border-color)",
-            color: "var(--text-primary)",
+            color: "var(--text-primary)", cursor: "pointer",
           }}
+          onClick={async () => {
+            if (!onOpenFile) return;
+            const label = p.file.replace(/\\/g, "/").split("/").pop() || p.file;
+            const ext = label.split(".").pop()?.toLowerCase() || "";
+
+            // Image files
+            const IMG_EXTS = new Set(["png", "jpg", "jpeg", "gif", "svg", "ico", "webp", "bmp", "tiff", "avif"]);
+            if (IMG_EXTS.has(ext)) {
+              const mimeMap: Record<string, string> = {
+                png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+                gif: "image/gif", svg: "image/svg+xml", ico: "image/x-icon",
+                webp: "image/webp", bmp: "image/bmp", tiff: "image/tiff",
+                avif: "image/avif",
+              };
+              try {
+                const b64 = await readFileBase64(p.file);
+                onOpenFile({ id: p.file, path: p.file, label, language: "image", content: `data:${mimeMap[ext]};base64,${b64}`, dirty: false });
+                return;
+              } catch { /* fall through */ }
+            }
+
+            const langMap: Record<string, string> = {
+              ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
+              rs: "rust", py: "python", java: "java", go: "go",
+              css: "css", html: "html", json: "json", md: "markdown",
+              sql: "sql", scss: "scss", less: "less", vue: "html",
+            };
+            let content = "";
+            try { content = await readFile(p.file); } catch { content = `// Could not read: ${p.file}`; }
+            onOpenFile({
+              id: p.file, path: p.file, label,
+              language: langMap[ext] || "plaintext",
+              content, dirty: false,
+            });
+          }}
+          title={`Click to open ${p.file}:${p.line}`}
         >
           <span style={{ color: SEVERITY_COLORS[p.severity], width: 16, textAlign: "center" }}>
             {SEVERITY_ICONS[p.severity]}

@@ -335,6 +335,66 @@ impl LspClient {
         std::mem::take(&mut *guard)
     }
 
+    /// Request completion items at a position.
+    pub fn completion(&mut self, uri: &str, line: u32, character: u32) -> Result<CompletionList, String> {
+        let params = serde_json::json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        });
+        let resp = self.send_request("textDocument/completion", params)?;
+        if let Some(result) = resp.result {
+            if result.is_null() {
+                return Ok(CompletionList { is_incomplete: false, items: vec![] });
+            }
+            serde_json::from_value(result).map_err(|e| format!("parse completion: {e}"))
+        } else {
+            Ok(CompletionList { is_incomplete: false, items: vec![] })
+        }
+    }
+
+    /// Request references to the symbol at a position.
+    pub fn references(&mut self, uri: &str, line: u32, character: u32, include_declaration: bool) -> Result<Vec<Location>, String> {
+        let params = serde_json::json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character },
+            "context": { "includeDeclaration": include_declaration }
+        });
+        let resp = self.send_request("textDocument/references", params)?;
+        if let Some(result) = resp.result {
+            if result.is_null() {
+                return Ok(vec![]);
+            }
+            serde_json::from_value::<Vec<Location>>(result).map_err(|e| format!("parse references: {e}"))
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    /// Request document formatting.
+    pub fn formatting(&mut self, uri: &str, tab_size: u32, insert_spaces: bool) -> Result<Vec<TextEdit>, String> {
+        let params = serde_json::json!({
+            "textDocument": { "uri": uri },
+            "options": { "tabSize": tab_size, "insertSpaces": insert_spaces }
+        });
+        let resp = self.send_request("textDocument/formatting", params)?;
+        if let Some(result) = resp.result {
+            if result.is_null() {
+                return Ok(vec![]);
+            }
+            serde_json::from_value::<Vec<RawTextEdit>>(result)
+                .map(|edits| {
+                    edits.into_iter().map(|e| TextEdit {
+                        uri: uri.to_string(),
+                        range: e.range,
+                        new_text: e.new_text,
+                    }).collect()
+                })
+                .map_err(|e| format!("parse formatting: {e}"))
+        } else {
+            Ok(vec![])
+        }
+    }
+
     /// Poll for incoming messages (notifications) — call this regularly.
     pub fn poll(&self) -> Result<(), String> {
         // Notifications are now handled inline during read_response.

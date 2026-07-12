@@ -15,7 +15,8 @@ import MenuBar, { buildMenus, MenuActions } from "./components/MenuBar";
 import { useLocale } from "./i18n/LocaleContext";
 import { KeybindingRegistry, KeyBinding } from "@oceanix/keybinding";
 import { applyTheme, DARK_THEME, LIGHT_THEME } from "@oceanix/theme";
-import { loadSession, saveSession, SessionState, getProjectRoot, writeFile, setProjectRoot, openFolderDialog, openFileDialog, readFile, openNewWindow } from "./services/api";
+import { loadSession, saveSession, SessionState, getProjectRoot, writeFile, setProjectRoot, openFolderDialog, openFileDialog, readFile, readFileBase64, openNewWindow, loadSettings, gitBranchName, gitDiff, gitShow } from "./services/api";
+import type { EditorSettings } from "./services/api";
 import { registerCommand as registerGlobalCommand } from "./services/commandBus";
 import { GlassDialog, GlassBtn } from "@oceanix/glass";
 
@@ -33,6 +34,7 @@ const DEFAULT_BINDINGS: KeyBinding[] = [
   { key: "Ctrl+K Ctrl+T", command: "theme.toggle", label: "Toggle Theme" },
   { key: "Shift+Alt+F", command: "editor.format", label: "Format Document" },
   { key: "Ctrl+Shift+V", command: "markdown.preview", label: "Markdown Preview" },
+  { key: "Shift+F12", command: "editor.goToReferences", label: "Go to References" },
 ];
 
 function App() {
@@ -49,6 +51,13 @@ function App() {
   const [fileChoicePath, setFileChoicePath] = useState<string | null>(null);
   const [folderChoicePath, setFolderChoicePath] = useState<string | null>(null);
   const [flatFiles, setFlatFiles] = useState<Array<{ path: string; name: string }>>([]);
+  // Cursor position for status bar
+  const [cursorLine, setCursorLine] = useState(1);
+  const [cursorColumn, setCursorColumn] = useState(1);
+  // Editor settings
+  const [editorSettings, setEditorSettings] = useState<EditorSettings | null>(null);
+  // Git branch for status bar
+  const [gitBranch, setGitBranch] = useState("main");
 
   const handleFileTreeLoaded = useCallback((files: Array<{ path: string; name: string }>) => {
     setFlatFiles(files);
@@ -101,7 +110,24 @@ function App() {
     const path = fileChoicePath;
     setFileChoicePath(null);
     const label = path.split("/").pop() || path;
-    const ext = label.split(".").pop() || "";
+    const ext = label.split(".").pop()?.toLowerCase() || "";
+
+    // Image files: read as base64 data URI
+    const IMG_EXTS = new Set(["png", "jpg", "jpeg", "gif", "svg", "ico", "webp", "bmp", "tiff", "avif"]);
+    if (IMG_EXTS.has(ext)) {
+      const mimeMap: Record<string, string> = {
+        png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+        gif: "image/gif", svg: "image/svg+xml", ico: "image/x-icon",
+        webp: "image/webp", bmp: "image/bmp", tiff: "image/tiff",
+        avif: "image/avif",
+      };
+      try {
+        const b64 = await readFileBase64(path);
+        openTab({ id: path, path, label, language: "image", content: `data:${mimeMap[ext]};base64,${b64}`, dirty: false });
+        return;
+      } catch { /* fall through */ }
+    }
+
     const langMap: Record<string, string> = {
       ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
       rs: "rust", json: "json", md: "markdown", css: "css", html: "html",
@@ -118,7 +144,24 @@ function App() {
     const path = fileChoicePath;
     setFileChoicePath(null);
     const label = path.split("/").pop() || path;
-    const ext = label.split(".").pop() || "";
+    const ext = label.split(".").pop()?.toLowerCase() || "";
+
+    // Image files: read as base64 data URI
+    const IMG_EXTS = new Set(["png", "jpg", "jpeg", "gif", "svg", "ico", "webp", "bmp", "tiff", "avif"]);
+    if (IMG_EXTS.has(ext)) {
+      const mimeMap: Record<string, string> = {
+        png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+        gif: "image/gif", svg: "image/svg+xml", ico: "image/x-icon",
+        webp: "image/webp", bmp: "image/bmp", tiff: "image/tiff",
+        avif: "image/avif",
+      };
+      try {
+        const b64 = await readFileBase64(path);
+        openTab({ id: path, path, label, language: "image", content: `data:${mimeMap[ext]};base64,${b64}`, dirty: false }, "split");
+        return;
+      } catch { /* fall through */ }
+    }
+
     const langMap: Record<string, string> = {
       ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
       rs: "rust", json: "json", md: "markdown", css: "css", html: "html",
@@ -261,7 +304,9 @@ function App() {
       label: "Go to Line",
       category: "Navigation",
       keybinding: "Ctrl+G",
-      action: () => {},
+      action: () => {
+        editorRef.current?.getAction("editor.action.gotoLine")?.run();
+      },
     },
     {
       id: "editor.format",
@@ -291,7 +336,18 @@ function App() {
       label: "Show Git Diff",
       category: "Git",
       keybinding: "Ctrl+Shift+D",
-      action: () => editorHandleRef.current?.openGitDiff(),
+      action: async () => {
+        if (!activeTabId) return;
+        const tab = tabs.find((t) => t.id === activeTabId);
+        if (!tab || tab.path.startsWith("untitled-")) return;
+        try {
+          const original = await gitShow(tab.path);
+          editorHandleRef.current?.openGitDiff(original);
+        } catch {
+          // File not in HEAD yet (untracked/new) — show empty original
+          editorHandleRef.current?.openGitDiff("");
+        }
+      },
     },
     {
       id: "editor.splitRight",
@@ -327,6 +383,15 @@ function App() {
       category: "Search",
       keybinding: "Ctrl+Shift+F",
       action: () => setSidebarView("search"),
+    },
+    {
+      id: "editor.goToReferences",
+      label: "Go to References",
+      category: "Navigation",
+      keybinding: "Shift+F12",
+      action: () => {
+        editorRef.current?.getAction("editor.action.goToReferences")?.run();
+      },
     },
   ], [activeTabId, saveTab, closeTab, openTab]);
 
@@ -386,7 +451,13 @@ function App() {
     applyTheme(theme === "dark" ? DARK_THEME : LIGHT_THEME);
   }, [theme]);
 
-  // ─── Session restore ─────────────────────────────────
+  // ─── Load settings & git branch ────────────────────
+  useEffect(() => {
+    loadSettings().then(setEditorSettings).catch(() => {});
+    gitBranchName().then(setGitBranch).catch(() => {});
+  }, []);
+
+  // ─── Session restore ──────────────────────────────
   useEffect(() => {
     loadSession().then((session) => {
       if (session?.openFiles?.length) {
@@ -563,6 +634,8 @@ function App() {
                       onSelectTab={setActiveTabId} onCloseTab={closeTab}
                       onContentChange={updateContent} onSave={saveTab}
                       editorRef={editorRef} projectRoot={projectRoot}
+                      onCursorChange={(line, col) => { setCursorLine(line); setCursorColumn(col); }}
+                      editorSettings={editorSettings}
                     />
                   </Panel>
                   <PanelResizeHandle className="resize-handle" />
@@ -578,6 +651,7 @@ function App() {
                         prev.map((t) => (t.id === id ? { ...t, dirty: false } : t))
                       )}
                       editorRef={splitEditorRef} projectRoot={projectRoot}
+                      editorSettings={editorSettings}
                     />
                   </Panel>
                 </PanelGroup>
@@ -588,6 +662,8 @@ function App() {
                     onSelectTab={setActiveTabId} onCloseTab={closeTab}
                     onContentChange={updateContent} onSave={saveTab}
                     editorRef={editorRef} projectRoot={projectRoot}
+                    onCursorChange={(line, col) => { setCursorLine(line); setCursorColumn(col); }}
+                    editorSettings={editorSettings}
                   />
                 </Panel>
               )}
@@ -616,7 +692,7 @@ function App() {
                       </div>
                       <div className="panel-content">
                         {panelTab === "terminal" && <Terminal id="main" />}
-                        {panelTab === "problems" && <ProblemsPanel />}
+                        {panelTab === "problems" && <ProblemsPanel onOpenFile={openTab} />}
                         {panelTab === "output" && <OutputPanel />}
                       </div>
                     </div>
@@ -628,12 +704,12 @@ function App() {
         </PanelGroup>
       </div>
       <StatusBar
-        currentLine={1}
-        currentColumn={1}
+        currentLine={cursorLine}
+        currentColumn={cursorColumn}
         encoding="UTF-8"
-        indentMode="Spaces: 2"
+        indentMode={editorSettings?.insertSpaces ? `Spaces: ${editorSettings.tabSize}` : `Tab Size: ${editorSettings?.tabSize ?? 2}`}
         language={activeTab?.language || "Plain Text"}
-        branch="main"
+        branch={gitBranch}
       />
 
       {showPalette && (

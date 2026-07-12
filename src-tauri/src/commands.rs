@@ -3,6 +3,7 @@
 
 use tauri::State;
 use std::sync::Mutex;
+use serde::Serialize;
 
 // ─── AI Bridge State ────────────────────────────────
 
@@ -411,6 +412,13 @@ pub fn git_diff(path: Option<String>, staged: Option<bool>, state: tauri::State<
     } else {
         repo.diff(path.as_deref())
     }
+}
+
+/// Return the HEAD version of a file (for use as diff original).
+#[tauri::command]
+pub fn git_show(path: String, state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
+    let repo = repo_from_state(&state)?;
+    repo.show(&path)
 }
 
 #[tauri::command]
@@ -943,6 +951,59 @@ pub struct LspLocationEdit {
     range_end_line: u32,
     range_end_char: u32,
     new_text: String,
+}
+
+#[derive(Serialize)]
+pub struct LspCompletionItem {
+    label: String,
+    detail: Option<String>,
+    insert_text: Option<String>,
+    kind: Option<u32>,
+}
+
+#[tauri::command]
+pub fn lsp_completion(language_id: String, path: String, line: u32, character: u32, state: tauri::State<'_, crate::LspState>) -> Result<Vec<LspCompletionItem>, String> {
+    let mut clients = state.clients.lock().map_err(|e| format!("lock: {e}"))?;
+    let client = clients.get_mut(&language_id).ok_or("LSP not started")?;
+    let uri = format!("file://{}", path.replace('\\', "/"));
+    let list = client.completion(&uri, line, character)?;
+    Ok(list.items.into_iter().map(|i| LspCompletionItem {
+        label: i.label,
+        detail: i.detail,
+        insert_text: i.insert_text,
+        kind: i.kind,
+    }).collect())
+}
+
+#[tauri::command]
+pub fn lsp_references(language_id: String, path: String, line: u32, character: u32, state: tauri::State<'_, crate::LspState>) -> Result<Vec<LspLocation>, String> {
+    let mut clients = state.clients.lock().map_err(|e| format!("lock: {e}"))?;
+    let client = clients.get_mut(&language_id).ok_or("LSP not started")?;
+    let uri = format!("file://{}", path.replace('\\', "/"));
+    let locs = client.references(&uri, line, character, true)?;
+    Ok(locs.into_iter().map(|l| LspLocation {
+        uri: l.uri,
+        range_start_line: l.range.start.line,
+        range_start_char: l.range.start.character,
+        range_end_line: l.range.end.line,
+        range_end_char: l.range.end.character,
+    }).collect())
+}
+
+#[tauri::command]
+pub fn lsp_formatting(language_id: String, path: String, tab_size: u32, insert_spaces: bool, state: tauri::State<'_, crate::LspState>) -> Result<Vec<LspLocationEdit>, String> {
+    let mut clients = state.clients.lock().map_err(|e| format!("lock: {e}"))?;
+    let client = clients.get_mut(&language_id).ok_or("LSP not started")?;
+    let uri = format!("file://{}", path.replace('\\', "/"));
+    let edits = client.formatting(&uri, tab_size, insert_spaces)?;
+    Ok(edits.into_iter().map(|e| LspLocationEdit {
+        uri: e.uri,
+        range_start_line: e.range.start.line,
+        range_start_char: e.range.start.character,
+        range_end_line: e.range.end.line,
+        range_end_char: e.range.end.character,
+        new_text: e.new_text,
+    }).collect())
 }
 
 // ─── Plugin Registry ────────────────────────────────

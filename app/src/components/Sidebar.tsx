@@ -11,6 +11,7 @@ import {
   gitLog,
   searchInFiles,
   ragSearch, ragRebuild, ragStats,
+  createFile, createDir, deleteFile, renameFile,
 } from "../services/api";
 import type { RAGResult } from "../services/api";
 import { useLocale } from "../i18n/LocaleContext";
@@ -109,6 +110,13 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
   const [ragError, setRagError] = useState<string | null>(null);
   const [ragStatsData, setRagStatsData] = useState<{ chunks: number; files: number; languages: string[] } | null>(null);
 
+  // Context menu state
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null);
+  const [ctxNewName, setCtxNewName] = useState("");
+  const [ctxShowRename, setCtxShowRename] = useState(false);
+  const [ctxShowNewFile, setCtxShowNewFile] = useState(false);
+  const [ctxShowNewFolder, setCtxShowNewFolder] = useState(false);
+
   // Reset file tree when project root changes
   useEffect(() => {
     setFileTree(null);
@@ -148,6 +156,20 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
   const refreshTree = useCallback(() => {
     setFileTree(null);
   }, []);
+
+  // Context menu styles
+  const ctxItemStyle: React.CSSProperties = {
+    padding: "4px 12px", cursor: "pointer",
+    color: "var(--text-primary)",
+  };
+  const ctxSepStyle: React.CSSProperties = {
+    height: 1, background: "var(--border-color)", margin: "4px 0",
+  };
+  const inlineInputStyle: React.CSSProperties = {
+    flex: 1, padding: "2px 6px", fontSize: 12,
+    background: "var(--bg-tertiary)", border: "1px solid var(--accent-color)",
+    color: "var(--text-primary)", borderRadius: 2, outline: "none",
+  };
 
   // Load git data once on mount (regardless of active view)
   useEffect(() => {
@@ -482,7 +504,10 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
               </div>
             )}
             {!treeLoading && !treeError && fileTree && (
-              <FileTree root={fileTree} onOpenFile={handleOpenFile} />
+              <FileTree root={fileTree} onOpenFile={handleOpenFile} onContextMenu={(node, e) => {
+                e.preventDefault();
+                setCtxMenu({ x: e.clientX, y: e.clientY, node });
+              }} />
             )}
             {!treeLoading && !treeError && !fileTree && (
               <div style={{ padding: 12, color: "var(--text-secondary)", fontSize: 13 }}>
@@ -490,6 +515,106 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
               </div>
             )}
           </div>
+
+          {/* Context menu */}
+          {ctxMenu && (
+            <>
+              <div style={{ position: "fixed", inset: 0, zIndex: 99 }}
+                onClick={() => { setCtxMenu(null); setCtxShowRename(false); setCtxShowNewFile(false); setCtxShowNewFolder(false); }}
+                onContextMenu={(e) => e.preventDefault()}
+              />
+              <div style={{
+                position: "fixed", left: ctxMenu.x, top: ctxMenu.y, zIndex: 100,
+                background: "var(--bg-secondary)", border: "1px solid var(--border-color)",
+                borderRadius: 4, padding: "4px 0", minWidth: 160, fontSize: 12,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+              }}>
+                {ctxMenu.node.type === "directory" && (
+                  <>
+                    <div style={ctxItemStyle} onClick={async () => {
+                      setCtxShowNewFile(true); setCtxMenu(null);
+                    }}>📄 New File</div>
+                    <div style={ctxItemStyle} onClick={async () => {
+                      setCtxShowNewFolder(true); setCtxMenu(null);
+                    }}>📁 New Folder</div>
+                    <div style={ctxSepStyle} />
+                  </>
+                )}
+                <div style={ctxItemStyle} onClick={() => {
+                  setCtxNewName(ctxMenu.node.name); setCtxShowRename(true); setCtxMenu(null);
+                }}>✏️ Rename</div>
+                <div style={{ ...ctxItemStyle, color: "#f44747" }} onClick={async () => {
+                  const n = ctxMenu.node;
+                  setCtxMenu(null);
+                  if (window.confirm(`Delete "${n.name}"?`)) {
+                    try { await deleteFile(n.path); refreshTree(); } catch {}
+                  }
+                }}>🗑️ Delete</div>
+              </div>
+            </>
+          )}
+
+          {/* Inline rename */}
+          {ctxShowRename && (
+            <div style={{ padding: "4px 8px", display: "flex", gap: 4 }}>
+              <input
+                autoFocus
+                style={inlineInputStyle}
+                value={ctxNewName}
+                onChange={(e) => setCtxNewName(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter") {
+                    const oldPath = ctxMenu?.node.path;
+                    if (oldPath && ctxNewName && ctxNewName !== ctxMenu?.node.name) {
+                      const dir = oldPath.replace(/[/\\][^/\\]*$/, "");
+                      try { await renameFile(oldPath, `${dir}/${ctxNewName}`); refreshTree(); } catch {}
+                    }
+                    setCtxShowRename(false);
+                  } else if (e.key === "Escape") setCtxShowRename(false);
+                }}
+              />
+            </div>
+          )}
+
+          {/* Inline new file */}
+          {ctxShowNewFile && (
+            <div style={{ padding: "4px 8px", display: "flex", gap: 4 }}>
+              <input
+                autoFocus
+                style={inlineInputStyle}
+                placeholder="filename.ts"
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter") {
+                    const name = (e.target as HTMLInputElement).value.trim();
+                    if (name && ctxMenu?.node.path) {
+                      try { await createFile(`${ctxMenu.node.path}/${name}`); refreshTree(); } catch {}
+                    }
+                    setCtxShowNewFile(false);
+                  } else if (e.key === "Escape") setCtxShowNewFile(false);
+                }}
+              />
+            </div>
+          )}
+
+          {/* Inline new folder */}
+          {ctxShowNewFolder && (
+            <div style={{ padding: "4px 8px", display: "flex", gap: 4 }}>
+              <input
+                autoFocus
+                style={inlineInputStyle}
+                placeholder="new-folder"
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter") {
+                    const name = (e.target as HTMLInputElement).value.trim();
+                    if (name && ctxMenu?.node.path) {
+                      try { await createDir(`${ctxMenu.node.path}/${name}`); refreshTree(); } catch {}
+                    }
+                    setCtxShowNewFolder(false);
+                  } else if (e.key === "Escape") setCtxShowNewFolder(false);
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
       {view === "search" && (
@@ -510,7 +635,10 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
                 <div key={i} style={{
                   padding: "4px 8px", fontSize: 12, cursor: "pointer",
                   color: "var(--text-primary)", borderBottom: "1px solid var(--border-color)",
-                }}>
+                }}
+                  onClick={() => handleOpenFile(r.file)}
+                  title={`Click to open ${r.file}:${r.line}`}
+                >
                   <div style={{ fontWeight: 600 }}>{r.file.split("/").pop()}:{r.line}</div>
                   <div style={{ color: "var(--text-secondary)", whiteSpace: "pre", overflow: "hidden", textOverflow: "ellipsis" }}>{r.text}</div>
                 </div>

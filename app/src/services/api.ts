@@ -149,6 +149,11 @@ export async function gitDiff(path?: string, staged?: boolean): Promise<string> 
   return invoke("git_diff", { path, staged });
 }
 
+/** Return the HEAD version of a file */
+export async function gitShow(path: string): Promise<string> {
+  return invoke("git_show", { path });
+}
+
 export async function gitCommit(message: string): Promise<string> {
   return invoke("git_commit", { message });
 }
@@ -422,6 +427,42 @@ export async function lspRename(
   newText: string;
 }>> {
   return invoke("lsp_rename", { languageId, path, line, character, newName });
+}
+
+export async function lspCompletion(
+  languageId: string, path: string, line: number, character: number
+): Promise<Array<{
+  label: string;
+  detail?: string;
+  insertText?: string;
+  kind?: number;
+}>> {
+  return invoke("lsp_completion", { languageId, path, line, character });
+}
+
+export async function lspReferences(
+  languageId: string, path: string, line: number, character: number
+): Promise<Array<{
+  uri: string;
+  rangeStartLine: number;
+  rangeStartChar: number;
+  rangeEndLine: number;
+  rangeEndChar: number;
+}>> {
+  return invoke("lsp_references", { languageId, path, line, character });
+}
+
+export async function lspFormatting(
+  languageId: string, path: string, tabSize: number, insertSpaces: boolean
+): Promise<Array<{
+  uri: string;
+  rangeStartLine: number;
+  rangeStartChar: number;
+  rangeEndLine: number;
+  rangeEndChar: number;
+  newText: string;
+}>> {
+  return invoke("lsp_formatting", { languageId, path, tabSize, insertSpaces });
 }
 
 // ─── Plugins ─────────────────────────────────────────

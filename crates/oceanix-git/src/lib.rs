@@ -215,6 +215,19 @@ impl GitRepo {
         self.render_diff(&diff)
     }
 
+    /// Return the content of a file at HEAD (for use as diff original).
+    #[instrument(skip(self))]
+    pub fn show(&self, path: &str) -> Result<String, String> {
+        let head = self.inner.head().map_err(|e| format!("no HEAD: {e}"))?;
+        let commit = head.peel_to_commit().map_err(|e| format!("peel commit: {e}"))?;
+        let tree = commit.tree().map_err(|e| format!("tree: {e}"))?;
+        let entry = tree.get_path(std::path::Path::new(path))
+            .map_err(|e| format!("path not in HEAD: {e}"))?;
+        let blob = self.inner.find_blob(entry.id())
+            .map_err(|e| format!("blob: {e}"))?;
+        Ok(String::from_utf8_lossy(blob.content()).to_string())
+    }
+
     // -----------------------------------------------------------------------
     // Commit
     // -----------------------------------------------------------------------

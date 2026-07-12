@@ -15,9 +15,9 @@ import MenuBar, { buildMenus, MenuActions } from "./components/MenuBar";
 import { useLocale } from "./i18n/LocaleContext";
 import { KeybindingRegistry, KeyBinding } from "@oceanix/keybinding";
 import { applyTheme, DARK_THEME, LIGHT_THEME } from "@oceanix/theme";
-import { loadSession, saveSession, SessionState, getProjectRoot, writeFile } from "./services/api";
+import { loadSession, saveSession, SessionState, getProjectRoot, writeFile, setProjectRoot, openFolderDialog, readFile } from "./services/api";
 import { registerCommand as registerGlobalCommand } from "./services/commandBus";
-import { GlassDialog } from "@oceanix/glass";
+import { GlassDialog, GlassBtn } from "@oceanix/glass";
 
 const DEFAULT_BINDINGS: KeyBinding[] = [
   { key: "Ctrl+Shift+P", command: "palette.show", label: "Show Command Palette" },
@@ -44,7 +44,8 @@ function App() {
   const [showPalette, setShowPalette] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [projectRoot, setProjectRoot] = useState(".");
+  const [projectRoot, setProjectRootState] = useState(".");
+  const [fileChoicePath, setFileChoicePath] = useState<string | null>(null);
   const [flatFiles, setFlatFiles] = useState<Array<{ path: string; name: string }>>([]);
 
   const handleFileTreeLoaded = useCallback((files: Array<{ path: string; name: string }>) => {
@@ -63,7 +64,20 @@ function App() {
   const [splitVisible, setSplitVisible] = useState(false);
   const [splitDirection, setSplitDirection] = useState<"horizontal" | "vertical">("horizontal");
 
-  const openTab = useCallback((tab: EditorTab) => {
+  const openTab = useCallback((tab: EditorTab, target?: "split") => {
+    if (target === "split") {
+      setSplitTabs((prev) => {
+        const existing = prev.find((t) => t.path === tab.path);
+        if (existing) {
+          setSplitActiveTabId(existing.id);
+          return prev;
+        }
+        return [...prev, tab];
+      });
+      setSplitActiveTabId(tab.id);
+      setSplitVisible(true);
+      return;
+    }
     setTabs((prev) => {
       const existing = prev.find((t) => t.path === tab.path);
       if (existing) {
@@ -73,7 +87,46 @@ function App() {
       return [...prev, tab];
     });
     setActiveTabId(tab.id);
+  }, [splitDirection]);
+
+  // ─── File open choice dialog ─────────────────────
+  const handleFileSelect = useCallback((path: string) => {
+    setFileChoicePath(path);
   }, []);
+
+  const handleOpenLocal = useCallback(async () => {
+    if (!fileChoicePath) return;
+    const path = fileChoicePath;
+    setFileChoicePath(null);
+    const label = path.split("/").pop() || path;
+    const ext = label.split(".").pop() || "";
+    const langMap: Record<string, string> = {
+      ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
+      rs: "rust", json: "json", md: "markdown", css: "css", html: "html",
+      py: "python", java: "java", go: "go", sql: "sql", scss: "scss", less: "less",
+      vue: "html",
+    };
+    let content = "";
+    try { content = await readFile(path); } catch { content = `// Could not read: ${path}`; }
+    openTab({ id: path, path, label, language: langMap[ext] || "plaintext", content, dirty: false });
+  }, [fileChoicePath, openTab]);
+
+  const handleOpenInNewPage = useCallback(async () => {
+    if (!fileChoicePath) return;
+    const path = fileChoicePath;
+    setFileChoicePath(null);
+    const label = path.split("/").pop() || path;
+    const ext = label.split(".").pop() || "";
+    const langMap: Record<string, string> = {
+      ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
+      rs: "rust", json: "json", md: "markdown", css: "css", html: "html",
+      py: "python", java: "java", go: "go", sql: "sql", scss: "scss", less: "less",
+      vue: "html",
+    };
+    let content = "";
+    try { content = await readFile(path); } catch { content = `// Could not read: ${path}`; }
+    openTab({ id: path, path, label, language: langMap[ext] || "plaintext", content, dirty: false }, "split");
+  }, [fileChoicePath, openTab]);
 
   const closeTab = useCallback((id: string) => {
     setTabs((prev) => {
@@ -276,8 +329,20 @@ function App() {
       const cmd = commandsRef.current.find((c) => c.id === cmdId);
       cmd?.action();
     };
+
+    // file.openFolder needs a direct handler — it's not in quickOpenCommands
+    const openFolderHandler = () => {
+      openFolderDialog().then((folder) => {
+        if (folder) {
+          setProjectRootState(folder);
+          setProjectRoot(folder).catch(() => {});
+        }
+      });
+    };
+    registry.registerCommand("file.openFolder", openFolderHandler);
+
     for (const binding of DEFAULT_BINDINGS) {
-      if (binding.command !== "palette.show") {
+      if (binding.command !== "palette.show" && binding.command !== "file.openFolder") {
         registry.registerCommand(binding.command, () => handler(binding.command));
       }
     }
@@ -286,7 +351,7 @@ function App() {
     // WelcomePage can trigger commands without fake KeyboardEvents
     // (which are unreliable in Tauri WebView2).
     registerGlobalCommand("file.new", () => handler("file.new"));
-    registerGlobalCommand("file.openFolder", () => handler("file.openFolder"));
+    registerGlobalCommand("file.openFolder", openFolderHandler);
     registerGlobalCommand("panel.toggle", () => handler("panel.toggle"));
     registerGlobalCommand("palette.show", () => handler("palette.show"));
     registerGlobalCommand("theme.toggle", () => handler("theme.toggle"));
@@ -322,7 +387,7 @@ function App() {
       }
     });
     // Load project root from backend
-    getProjectRoot().then(setProjectRoot).catch(() => {});
+    getProjectRoot().then(setProjectRootState).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -349,7 +414,14 @@ function App() {
       openTab({ id, path: id, label: "Untitled", language: "plaintext", content: "", dirty: false });
     },
     onOpenFile: () => setShowPalette(true),
-    onOpenFolder: () => setShowPalette(true),
+    onOpenFolder: () => {
+      openFolderDialog().then((folder) => {
+        if (folder) {
+          setProjectRootState(folder);
+          setProjectRoot(folder).catch(() => {});
+        }
+      });
+    },
     onSave: () => {
       if (!activeTabId) return;
       const tab = tabs.find((t) => t.id === activeTabId);
@@ -435,6 +507,7 @@ function App() {
                 <Sidebar
                   view={sidebarView}
                   onOpenFile={openTab}
+                  onFileSelect={handleFileSelect}
                   projectRoot={projectRoot}
                   onFileTreeLoaded={handleFileTreeLoaded}
                 />
@@ -540,6 +613,34 @@ function App() {
             width: 480, maxHeight: "80vh", overflow: "auto",
           }}>
             <SettingsPanel onClose={() => setShowSettings(false)} />
+          </div>
+        </GlassDialog>
+      )}
+
+      {/* File open choice dialog */}
+      {fileChoicePath && (
+        <GlassDialog open={!!fileChoicePath} onClose={() => setFileChoicePath(null)} dialogClassName={undefined}>
+          <div style={{ width: 400, padding: "8px 0" }}>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)" }}>
+              Open File
+            </div>
+            <div style={{
+              fontSize: 12, color: "var(--text-secondary)", marginBottom: 20,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {fileChoicePath}
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <GlassBtn onClick={() => setFileChoicePath(null)}>
+                Cancel
+              </GlassBtn>
+              <GlassBtn onClick={handleOpenInNewPage}>
+                Open in New Page
+              </GlassBtn>
+              <GlassBtn accent onClick={handleOpenLocal}>
+                Open Locally
+              </GlassBtn>
+            </div>
           </div>
         </GlassDialog>
       )}

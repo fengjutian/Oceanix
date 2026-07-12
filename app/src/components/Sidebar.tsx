@@ -9,6 +9,9 @@ import { useLocale } from "../i18n/LocaleContext";
 interface SidebarProps {
   view: string;
   onOpenFile?: (tab: EditorTab) => void;
+  /** If provided, called when a file is clicked instead of onOpenFile.
+   *  The parent can then show a choice dialog and call onOpenFile directly. */
+  onFileSelect?: (path: string) => void;
   projectRoot: string;
   onFileTreeLoaded?: (files: Array<{ path: string; name: string }>) => void;
 }
@@ -68,7 +71,7 @@ async function buildFileTree(dirPath: string, dirName: string, depth: number): P
   return node;
 }
 
-export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoaded }: SidebarProps) {
+export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, onFileTreeLoaded }: SidebarProps) {
   const { t } = useLocale();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Array<{ file: string; line: number; text: string }>>([]);
@@ -82,6 +85,11 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
   const [gitBranchesList, setGitBranchesList] = useState<Array<{ name: string; isHead: boolean }>>([]);
   const [gitLoading, setGitLoading] = useState(false);
   const [gitError, setGitError] = useState<string | null>(null);
+
+  // Reset file tree when project root changes
+  useEffect(() => {
+    setFileTree(null);
+  }, [projectRoot]);
 
   // SAFE MODE STEP 1: restore file tree loading
   useEffect(() => {
@@ -205,6 +213,12 @@ export default function Sidebar({ view, onOpenFile, projectRoot, onFileTreeLoade
   }, [searchQuery]);
 
   const handleOpenFile = async (path: string) => {
+    // If parent wants to intercept (show choice dialog), let it handle the rest
+    if (onFileSelect) {
+      onFileSelect(path);
+      return;
+    }
+
     if (onOpenFile) {
       const label = path.split("/").pop() || path;
       const ext = label.split(".").pop() || "";

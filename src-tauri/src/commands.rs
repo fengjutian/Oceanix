@@ -395,6 +395,13 @@ pub fn get_cwd() -> Result<String, String> {
         .map_err(|e| format!("Failed to get current dir: {e}"))
 }
 
+#[tauri::command]
+pub fn set_cwd(path: String) -> Result<String, String> {
+    std::env::set_current_dir(&path)
+        .map_err(|e| format!("Failed to set current dir: {e}"))?;
+    Ok(path)
+}
+
 // ─── LSP ────────────────────────────────────────────
 
 use oceanix_lsp::LspClient;

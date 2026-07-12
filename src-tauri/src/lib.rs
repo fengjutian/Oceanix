@@ -74,6 +74,7 @@ pub fn run() {
     };
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .manage(ai_state)
         .manage(git_state)
@@ -125,6 +126,7 @@ pub fn run() {
             commands::plugin_list,
             commands::plugin_contributions,
             commands::get_cwd,
+            commands::set_cwd,
         ])
         .setup(|app| {
             // File system watcher — emits 'file-changed' event when project files change

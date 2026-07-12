@@ -91,6 +91,25 @@ export async function getProjectRoot(): Promise<string> {
   return invoke("get_cwd");
 }
 
+export async function setProjectRoot(path: string): Promise<string> {
+  return invoke("set_cwd", { path });
+}
+
+/**
+ * Open a native folder picker dialog and return the selected path (or null if cancelled).
+ * Uses @tauri-apps/plugin-dialog.
+ */
+export async function openFolderDialog(): Promise<string | null> {
+  try {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const selected = await open({ directory: true, multiple: false, title: "Open Folder" });
+    return selected as string | null;
+  } catch (e) {
+    console.error("openFolderDialog failed:", e);
+    return null;
+  }
+}
+
 // ─── Git ─────────────────────────────────────────────
 
 export async function gitStatus(): Promise<Array<{ path: string; status: string }>> {

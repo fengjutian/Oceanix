@@ -96,18 +96,22 @@ interface EditorTabsProps {
   editorSettings?: EditorSettings | null;
 }
 
-const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function EditorTabs({
-  tabs,
-  activeTabId,
-  onSelectTab,
-  onCloseTab,
-  onContentChange,
-  onSave,
-  editorRef,
-  projectRoot,
-  onCursorChange,
-  editorSettings,
-}, ref) {
+const EditorTabs = forwardRef((
+  props: EditorTabsProps,
+  ref: React.ForwardedRef<EditorTabsHandle>
+) => {
+  const {
+    tabs,
+    activeTabId,
+    onSelectTab,
+    onCloseTab,
+    onContentChange,
+    onSave,
+    editorRef,
+    projectRoot,
+    onCursorChange,
+    editorSettings,
+  } = props;
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
   const [splitMode, setSplitMode] = useState<"markdown" | null>(null);
@@ -313,16 +317,17 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
   // Update breakpoint decorations when set changes
   useEffect(() => {
     const editor = editorRef?.current;
-    if (!editor) return;
+    if (!editor || !monacoRef.current) return;
+    const Range = monacoRef.current.Range;
     const decos = Array.from(breakpoints).map((line) => ({
-      range: new (window as any).monaco?.Range?.(line, 1, line, 1) ?? { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
+      range: new Range(line, 1, line, 1),
       options: {
         isWholeLine: true,
         glyphMarginClassName: "bp-glyph",
         linesDecorationsClassName: "bp-line",
       },
     }));
-    bpDecorationsRef.current = editor.deltaDecorations(bpDecorationsRef.current, decos as any);
+    bpDecorationsRef.current = editor.deltaDecorations(bpDecorationsRef.current, decos);
   }, [breakpoints]);
 
   const toggleBlame = useCallback(async () => {
@@ -340,10 +345,8 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
         const model = editor.getModel();
         if (!model) return;
 
-        const decos = entries.map((e: GitBlameEntry, i: number) => ({
-          range: new (monacoRef.current?.Range ?? (await import("monaco-editor")).Range)(
-            e.line, 1, e.line, 1
-          ),
+        const decos = entries.map((e: GitBlameEntry) => ({
+          range: new (monacoRef.current!.Range)(e.line, 1, e.line, 1),
           options: {
             isWholeLine: false,
             after: {

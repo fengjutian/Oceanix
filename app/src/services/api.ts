@@ -106,6 +106,10 @@ export async function setProjectRoot(path: string): Promise<string> {
  * Open a new IDE window with the given folder as the project root.
  * Spawns a new Oceanix process with its working directory set to `path`.
  */
+export async function openNewWindow(path: string): Promise<void> {
+  return invoke("open_new_window", { path });
+}
+
 /** Run a shell command and return output (stdout+stderr). */
 export async function taskRun(command: string, cwd?: string): Promise<string> {
   return invoke("task_run", { command, cwd });

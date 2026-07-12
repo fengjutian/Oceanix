@@ -170,6 +170,10 @@ export interface LocaleStrings {
   "settings.label.aiModel": string;
   "settings.desc.aiModel": string;
 
+  // ── MCP Tools ──────────────────────────────────
+  "settings.group.mcpTools": string;
+  "settings.mcpTools.unavailable": string;
+
   // ── Common ─────────────────────────────────────
   "common.justNow": string;
   "common.mAgo": string;
@@ -341,6 +345,10 @@ const en: LocaleStrings = {
   "settings.label.aiModel": "AI Model",
   "settings.desc.aiModel": "Select the AI model for chat and completions.",
 
+  // MCP Tools
+  "settings.group.mcpTools": "MCP Tools",
+  "settings.mcpTools.unavailable": "MCP tools are not available. Ensure the AI sidecar is running.",
+
   // Common
   "common.justNow": "Just now",
   "common.mAgo": "m ago",
@@ -511,6 +519,10 @@ const zh: LocaleStrings = {
   "settings.group.ai": "AI",
   "settings.label.aiModel": "AI 模型",
   "settings.desc.aiModel": "选择用于对话和补全的 AI 模型。",
+
+  // MCP Tools
+  "settings.group.mcpTools": "MCP 工具",
+  "settings.mcpTools.unavailable": "MCP 工具不可用，请确保 AI 侧车正在运行。",
 
   // Common
   "common.justNow": "刚刚",

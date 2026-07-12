@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { loadSettings, saveSettings, type EditorSettings } from "../services/api";
+import { loadSettings, saveSettings, getMcpTools, type EditorSettings, type McpToolDef } from "../services/api";
 import { DARK_THEME, LIGHT_THEME, applyTheme } from "@oceanix/theme";
 import { Search } from "lucide-react";
 import { useLocale } from "../i18n/LocaleContext";
@@ -57,6 +57,7 @@ const GROUP_I18N_KEYS: Record<string, string> = {
   "Appearance": "settings.group.appearance",
   "Editor": "settings.group.editor",
   "AI": "settings.group.ai",
+  "MCP Tools": "settings.group.mcpTools",
 };
 
 // ── Component ──────────────────────────────────────────
@@ -67,11 +68,21 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState("");
   const [activeGroup, setActiveGroup] = useState("Appearance");
+  const [mcpTools, setMcpTools] = useState<McpToolDef[]>([]);
+  const [mcpToolsLoading, setMcpToolsLoading] = useState(false);
 
   const settingGroups = useMemo(() => getSettingGroups(t as (key: string) => string), [t]);
 
   useEffect(() => {
     loadSettings().then((s) => { setSettings(s); setLoaded(true); }).catch(() => setLoaded(true));
+  }, []);
+
+  useEffect(() => {
+    setMcpToolsLoading(true);
+    getMcpTools()
+      .then((tools) => setMcpTools(tools))
+      .catch(() => setMcpTools([]))
+      .finally(() => setMcpToolsLoading(false));
   }, []);
 
   const update = <K extends keyof EditorSettings>(key: K, value: EditorSettings[K]) => {
@@ -140,12 +151,67 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                 {t(GROUP_I18N_KEYS[group])}
               </div>
             ))}
+            <div
+              onClick={() => setActiveGroup("MCP Tools")}
+              style={{
+                padding: "6px 16px", fontSize: 13, cursor: "pointer",
+                color: activeGroup === "MCP Tools" ? "var(--text-primary)" : "var(--text-secondary)",
+                background: activeGroup === "MCP Tools" ? "var(--bg-tertiary)" : "transparent",
+              }}
+            >
+              {t("settings.group.mcpTools")}
+            </div>
           </div>
         )}
 
         {/* Right: settings list */}
         <div style={{ flex: 1, overflow: "auto" }}>
-          {filtered.map((def) => {
+          {/* MCP Tools custom view */}
+          {activeGroup === "MCP Tools" && !search.trim() ? (
+            mcpToolsLoading ? (
+              <div style={{ padding: 16, color: "var(--text-secondary)", fontSize: 13 }}>{t("sidebar.loading")}</div>
+            ) : mcpTools.length === 0 ? (
+              <div style={{ padding: 16, color: "var(--text-secondary)", fontSize: 13 }}>
+                {t("settings.mcpTools.unavailable")}
+              </div>
+            ) : (
+              mcpTools.map((tool) => (
+                <div key={tool.name} style={{
+                  padding: "12px 16px", borderBottom: "1px solid var(--border-color)",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <code style={{
+                      background: "var(--bg-tertiary)", padding: "1px 6px", borderRadius: 3,
+                      fontSize: 12, color: "var(--accent-color, #4fc1ff)", fontFamily: "var(--font-mono)",
+                    }}>
+                      {tool.name}
+                    </code>
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8, lineHeight: 1.5 }}>
+                    {tool.description}
+                  </div>
+                  {tool.parameters.length > 0 && (
+                    <div style={{
+                      background: "var(--bg-tertiary)", borderRadius: 4, padding: "6px 10px",
+                      fontSize: 12, fontFamily: "var(--font-mono)",
+                    }}>
+                      {tool.parameters.map((p, i) => (
+                        <div key={p.name} style={{
+                          color: "var(--text-secondary)", marginTop: i > 0 ? 2 : 0,
+                        }}>
+                          <span style={{ color: "var(--accent-color, #4fc1ff)" }}>{p.name}</span>
+                          <span style={{ color: "var(--text-tertiary, #888)" }}>: {p.type}</span>
+                          <span style={{ marginLeft: 8, color: "var(--text-secondary)" }}>— {p.description}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
+            )
+          ) : (
+            /* Standard settings rendering */
+            filtered.map((def) => {
             const value = settings[def.key];
             return (
               <div key={def.key} style={{
@@ -193,7 +259,8 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                 </div>
               </div>
             );
-          })}
+          })
+          )}
         </div>
       </div>
     </div>

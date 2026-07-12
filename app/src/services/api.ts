@@ -585,6 +585,9 @@ export async function agentExecuteStreaming(
   onEvent: (event: AgentStreamEvent) => void,
   signal?: AbortSignal
 ): Promise<void> {
+  // Ensure the Python AI sidecar (HTTP on port 11435) is running
+  await invoke("ai_ensure_running");
+
   const response = await fetch(`${AI_HTTP}/agent/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -629,6 +632,23 @@ export async function agentExecuteStreaming(
       }
     }
   }
+}
+
+// ─── MCP Tools ───────────────────────────────────────
+
+export interface McpToolDef {
+  name: string;
+  description: string;
+  parameters: Array<{ name: string; type: string; description: string }>;
+}
+
+export async function getMcpTools(): Promise<McpToolDef[]> {
+  // Ensure the Python AI sidecar (HTTP on port 11435) is running
+  await invoke("ai_ensure_running");
+  const res = await fetch(`${AI_HTTP}/mcp/tools`);
+  if (!res.ok) throw new Error(`Failed to fetch MCP tools: ${res.status}`);
+  const data = await res.json();
+  return data.tools ?? [];
 }
 
 export interface ConvMeta {

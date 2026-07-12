@@ -226,6 +226,17 @@ pub fn ai_status(ai_state: State<AiState>) -> Result<bool, String> {
     Ok(ai_state.bridge.lock().map_err(|e| format!("Lock poisoned: {e}"))?.is_ready())
 }
 
+/// Ensure the AI sidecar is running. No-op if already started.
+/// Call this before any direct HTTP API call to port 11435.
+#[tauri::command]
+pub fn ai_ensure_running(ai_state: State<AiState>) -> Result<bool, String> {
+    let mut bridge = ai_state.bridge.lock().map_err(|e| format!("Lock poisoned: {e}"))?;
+    if !bridge.is_ready() {
+        bridge.start().map_err(|e| format!("Failed to start AI sidecar: {e}"))?;
+    }
+    Ok(true)
+}
+
 #[tauri::command]
 pub fn ai_agent_execute(params: serde_json::Value, ai_state: State<AiState>) -> Result<serde_json::Value, String> {
     let mut bridge = ai_state.bridge.lock().map_err(|e| format!("Lock poisoned: {e}"))?;

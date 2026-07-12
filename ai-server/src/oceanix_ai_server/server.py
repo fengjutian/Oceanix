@@ -327,6 +327,62 @@ def _get_llm(model: str | None = None):
     return None
 
 
+# ── MCP tool metadata ────────────────────────────────
+
+
+def get_mcp_tool_definitions() -> list[dict]:
+    """Return metadata for all registered MCP tools.
+
+    Used by the HTTP API to expose the tool list to the frontend.
+    """
+    return [
+        {
+            "name": "agent_execute",
+            "description": "Execute an autonomous agent task using the editor tools. The agent will plan, execute tools, and report results.",
+            "parameters": [
+                {"name": "task", "type": "str", "description": "Description of what the agent should do."},
+                {"name": "max_steps", "type": "int", "description": "Maximum execution steps (default 10)."},
+            ],
+        },
+        {
+            "name": "completion",
+            "description": "Generate inline code completion (ghost text) at the cursor position.",
+            "parameters": [
+                {"name": "code", "type": "str", "description": "Full file content."},
+                {"name": "position", "type": "dict", "description": "Dict with 'line' and 'column' keys (1-indexed)."},
+                {"name": "language", "type": "str", "description": "Programming language identifier."},
+                {"name": "file_path", "type": "str", "description": "Absolute path of the file being edited."},
+            ],
+        },
+        {
+            "name": "chat",
+            "description": "Chat with the AI assistant using the LLM provider.",
+            "parameters": [
+                {"name": "messages", "type": "list[dict]", "description": "List of {'role': 'user'|'assistant'|'system', 'content': str}."},
+                {"name": "context_files", "type": "list[str] | None", "description": "Optional list of file paths for additional context."},
+            ],
+        },
+        {
+            "name": "search_codebase",
+            "description": "Search the project codebase using the RAG index. Accepts natural language or code snippets.",
+            "parameters": [
+                {"name": "query", "type": "str", "description": "Search query — natural language or code snippets."},
+                {"name": "top_k", "type": "int", "description": "Number of results to return (default 10)."},
+            ],
+        },
+        {
+            "name": "rebuild_rag_index",
+            "description": "Rebuild the RAG code index from scratch. Use after major code changes or if search results seem stale.",
+            "parameters": [],
+        },
+        {
+            "name": "rag_stats",
+            "description": "Get RAG index statistics — number of files, chunks, and index size.",
+            "parameters": [],
+        },
+    ]
+
+
 # ── Entry point ────────────────────────────────────────
 
 def main():

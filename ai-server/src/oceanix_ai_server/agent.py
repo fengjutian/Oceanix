@@ -17,7 +17,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMe
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
-from .tools import TOOLS
+from . import tool_registry
 
 
 # ── Agent State ─────────────────────────────────────────
@@ -35,12 +35,13 @@ class AgentState(TypedDict):
 
 
 def _get_agent_llm():
-    """Get a chat model bound with editor tools."""
+    """Get a chat model bound with all tools (built-in + user-registered)."""
     from .server import _get_llm
     llm = _get_llm()
     if llm is None:
         raise RuntimeError("No LLM configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
-    return llm.bind_tools(TOOLS)
+    all_tools = tool_registry.get_all_tools()
+    return llm.bind_tools(all_tools)
 
 
 # ── Agent LLM Node ─────────────────────────────────────
@@ -129,7 +130,10 @@ def executor_node(state: AgentState) -> AgentState:
 
 # ── Tools Node ──────────────────────────────────────────
 
-tool_node = ToolNode(TOOLS)
+
+def _get_tool_node():
+    """Create a ToolNode with the current tool set (built-in + user)."""  
+    return ToolNode(tool_registry.get_all_tools())
 
 
 # ── Router ──────────────────────────────────────────────
@@ -165,7 +169,7 @@ def create_agent():
     # Nodes: plan → agent_llm ⇄ tools → end
     workflow.add_node("plan", plan_node)
     workflow.add_node("agent_llm", agent_llm_node)
-    workflow.add_node("tools", tool_node)
+    workflow.add_node("tools", _get_tool_node())
 
     workflow.set_entry_point("plan")
 

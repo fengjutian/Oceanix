@@ -434,6 +434,24 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
 
   return (
     <div className="editor-area">
+      {/* Breadcrumb */}
+      {activeTab && activeTab.path && !activeTab.path.startsWith("untitled-") && (
+        <div style={{
+          display: "flex", alignItems: "center", height: 22, padding: "0 8px",
+          fontSize: 12, color: "var(--text-secondary)", background: "var(--bg-secondary)",
+          borderBottom: "1px solid var(--border-color)", overflow: "hidden",
+          gap: 4, fontFamily: "system-ui, sans-serif",
+        }}>
+          {activeTab.path.replace(/\\/g, "/").split("/").map((seg, i, arr) => (
+            <span key={i} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              {i > 0 && <span style={{ opacity: 0.4 }}>›</span>}
+              <span style={{ color: i === arr.length - 1 ? "var(--text-primary)" : undefined }}>
+                {seg || "/"}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
       {/* Tab bar */}
       <div className="tab-bar">
         {tabs.map((tab) => (
@@ -503,6 +521,8 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
                 smoothScrolling: true,
                 cursorBlinking: "smooth",
                 cursorSmoothCaretAnimation: "on",
+                renderIndentGuides: "always",
+                guides: { indentation: true, bracketPairs: true },
               }}
             />
             )

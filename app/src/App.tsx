@@ -8,6 +8,7 @@ import Terminal from "./components/Terminal";
 import TerminalPanel from "./components/TerminalPanel";
 import GitPanel from "./components/GitPanel";
 import ProblemsPanel from "./components/ProblemsPanel";
+import DebugPanel from "./components/DebugPanel";
 import OutputPanel from "./components/OutputPanel";
 import SettingsPanel from "./components/SettingsPanel";
 import type { editor } from "monaco-editor";
@@ -16,7 +17,7 @@ import MenuBar, { buildMenus, MenuActions } from "./components/MenuBar";
 import { useLocale } from "./i18n/LocaleContext";
 import { KeybindingRegistry, KeyBinding } from "@oceanix/keybinding";
 import { applyTheme, DARK_THEME, LIGHT_THEME } from "@oceanix/theme";
-import { loadSession, saveSession, SessionState, getProjectRoot, writeFile, setProjectRoot, openFolderDialog, openFileDialog, readFile, readFileBase64, openNewWindow, loadSettings, gitBranchName, gitDiff, gitShow } from "./services/api";
+import { loadSession, saveSession, SessionState, getProjectRoot, writeFile, setProjectRoot, openFolderDialog, openFileDialog, readFile, readFileBase64, openNewWindow, loadSettings, gitBranchName, gitDiff, gitShow, taskRun } from "./services/api";
 import type { EditorSettings } from "./services/api";
 import { registerCommand as registerGlobalCommand } from "./services/commandBus";
 import { GlassDialog, GlassBtn } from "@oceanix/glass";
@@ -44,7 +45,7 @@ function App() {
   const [sidebarView, setSidebarView] = useState("explorer");
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [panelVisible, setPanelVisible] = useState(false);
-  const [panelTab, setPanelTab] = useState<"terminal" | "problems" | "output">("terminal");
+  const [panelTab, setPanelTab] = useState<"terminal" | "problems" | "output" | "debug">("terminal");
   const [showPalette, setShowPalette] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [selectionContext, setSelectionContext] = useState<{ code: string; file: string; language: string } | null>(null);
@@ -221,6 +222,7 @@ function App() {
   const lastSavedContent = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
+    if (editorSettings?.autoSave === "off") return;
     const dirtyTabs = tabs.filter((t) => t.dirty && t.path && !t.path.startsWith("untitled-"));
     for (const tab of dirtyTabs) {
       if (autoSaveTimers.current.has(tab.id)) continue;
@@ -234,7 +236,7 @@ function App() {
         } catch {
         }
         autoSaveTimers.current.delete(tab.id);
-      }, 1500);
+      }, editorSettings?.autoSaveDelay ?? 1500);
 
       autoSaveTimers.current.set(tab.id, timer);
     }
@@ -408,6 +410,25 @@ function App() {
       keybinding: "F9",
       action: () => editorHandleRef.current?.toggleBreakpoint(),
     },
+    {
+      id: "task.run",
+      label: "Run Task...",
+      category: "Task",
+      action: () => {
+        const cmd = window.prompt("Enter shell command:");
+        if (cmd) {
+          import("./components/OutputPanel").then((m) => {
+            m.emitOutput(`> ${cmd}`, "info");
+            setPanelVisible(true);
+            taskRun(cmd, projectRoot).then((out) => {
+              m.emitOutput(out, "stdout");
+            }).catch((e) => {
+              m.emitOutput(String(e), "stderr");
+            });
+          });
+        }
+      },
+    },
   ], [activeTabId, saveTab, closeTab, openTab]);
 
   // Always holds the latest commands so the keybinding registry
@@ -501,7 +522,7 @@ function App() {
       const session: SessionState = {
         openFiles: tabs.map((t) => t.path),
         activeFile: tabs.find((t) => t.id === activeTabId)?.path || null,
-        cursorPositions: {},
+        cursorPositions: { [activeTab?.path ?? ""]: { line: cursorLine, column: cursorColumn } },
         layoutSizes: [20, 80],
         sidebarView,
         sidebarVisible,
@@ -689,11 +710,12 @@ function App() {
                   <Panel defaultSize={25} minSize={10} maxSize={50}>
                     <div className="panel-container">
                       <div className="panel-tabs">
-                        {(["terminal", "problems", "output"] as const).map((tab) => {
+                        {(["terminal", "problems", "output", "debug"] as const).map((tab) => {
                           const labels: Record<string, string> = {
                             terminal: t("panel.terminal"),
                             problems: t("panel.problems"),
                             output: t("panel.output"),
+                            debug: "Debug",
                           };
                           return (
                           <span
@@ -710,6 +732,31 @@ function App() {
                         {panelTab === "terminal" && <TerminalPanel />}
                         {panelTab === "problems" && <ProblemsPanel onOpenFile={openTab} />}
                         {panelTab === "output" && <OutputPanel />}
+                        {panelTab === "debug" && <DebugPanel onRun={() => {
+                          // Run active file
+                          if (!activeTab || activeTab.path.startsWith("untitled-")) return;
+                          const ext = activeTab.language;
+                          const cmdMap: Record<string, string> = {
+                            python: `python "${activeTab.path}"`,
+                            rust: `cargo run`,
+                            typescript: `npx ts-node "${activeTab.path}"`,
+                            javascript: `node "${activeTab.path}"`,
+                            go: `go run "${activeTab.path}"`,
+                            java: `javac "${activeTab.path}" && java "${activeTab.path.replace('.java','')}"`,
+                          };
+                          const cmd = cmdMap[ext];
+                          if (cmd) {
+                            import("./components/OutputPanel").then((m) => {
+                              m.emitOutput(`> ${cmd}`, "info");
+                              setPanelTab("output");
+                              taskRun(cmd, projectRoot).then((out) => {
+                                m.emitOutput(out, "stdout");
+                              }).catch((e) => {
+                                m.emitOutput(String(e), "stderr");
+                              });
+                            });
+                          }
+                        }} />}
                       </div>
                     </div>
                   </Panel>

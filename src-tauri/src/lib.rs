@@ -164,6 +164,7 @@ pub fn run() {
             commands::get_cwd,
             commands::set_cwd,
             commands::open_new_window,
+            commands::task_run,
         ])
         .setup(|app| {
             // File system watcher — emits 'file-changed' event when project files change

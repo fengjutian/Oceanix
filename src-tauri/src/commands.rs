@@ -776,6 +776,27 @@ pub fn open_new_window(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Run a shell command and return its stdout + stderr.
+#[tauri::command]
+pub fn task_run(command: String, cwd: Option<String>) -> Result<String, String> {
+    let mut cmd = if cfg!(target_os = "windows") {
+        let mut c = std::process::Command::new("cmd");
+        c.arg("/C").arg(&command);
+        c
+    } else {
+        let mut c = std::process::Command::new("sh");
+        c.arg("-c").arg(&command);
+        c
+    };
+    if let Some(dir) = cwd {
+        cmd.current_dir(&dir);
+    }
+    let output = cmd.output().map_err(|e| format!("Task failed: {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    Ok(format!("{stdout}{stderr}"))
+}
+
 // ─── LSP ────────────────────────────────────────────
 
 use oceanix_lsp::LspClient;

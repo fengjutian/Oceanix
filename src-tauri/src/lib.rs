@@ -99,6 +99,7 @@ pub fn run() {
             commands::ai_complete,
             commands::ai_chat,
             commands::ai_status,
+            commands::ai_agent_execute,
             commands::search_files,
             commands::terminal_create,
             commands::terminal_read,

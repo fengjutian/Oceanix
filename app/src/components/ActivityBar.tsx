@@ -1,4 +1,4 @@
-import { FolderOpen, Search, GitBranch, Bot, Database, Settings } from "lucide-react";
+import { FolderOpen, Search, GitBranch, Bot, Database, Settings, Sparkles } from "lucide-react";
 import { useLocale } from "../i18n/LocaleContext";
 
 interface ActivityBarProps {
@@ -14,6 +14,7 @@ export default function ActivityBar({ activeView, onViewChange, onOpenSettings }
     search: { icon: <Search size={20} />, label: t("activity.search") },
     git: { icon: <GitBranch size={20} />, label: t("activity.git") },
     ai: { icon: <Bot size={20} />, label: t("activity.ai") },
+    agent: { icon: <Sparkles size={20} />, label: t("activity.agent") },
     rag: { icon: <Database size={20} />, label: t("activity.rag") },
   };
 

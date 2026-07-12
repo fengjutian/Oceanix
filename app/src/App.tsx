@@ -655,6 +655,10 @@ function App() {
                     activeFile: activeTab?.path ?? "",
                     activeLanguage: activeTab?.language,
                   }}
+                  onOpenInAgent={(_path) => {
+                    setSidebarView("agent");
+                    setSidebarVisible(true);
+                  }}
                 />
               </Panel>
               <PanelResizeHandle className="resize-handle" />

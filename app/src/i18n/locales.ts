@@ -82,6 +82,7 @@ export interface LocaleStrings {
   "activity.search": string;
   "activity.git": string;
   "activity.ai": string;
+  "activity.agent": string;
   "activity.rag": string;
 
   // ── Sidebar ────────────────────────────────────
@@ -92,7 +93,8 @@ export interface LocaleStrings {
   "sidebar.aiChat": string;
   "sidebar.aiStreaming": string;
   "sidebar.rag": string;
-  "rag.searchPlaceholder": string;
+  "sidebar.agent": string;
+  "agent.placeholder": string;
   "rag.rebuild": string;
   "rag.noResults": string;
   "sidebar.loading": string;
@@ -250,6 +252,7 @@ const en: LocaleStrings = {
   "activity.search": "Search",
   "activity.git": "Git",
   "activity.ai": "AI",
+  "activity.agent": "Agent",
   "activity.rag": "RAG",
 
   // Sidebar
@@ -260,6 +263,8 @@ const en: LocaleStrings = {
   "sidebar.aiChat": "AI Chat",
   "sidebar.aiStreaming": "streaming",
   "sidebar.rag": "RAG",
+  "sidebar.agent": "Agent",
+  "agent.placeholder": "Describe what the agent should do...",
   "rag.searchPlaceholder": "Search codebase...",
   "rag.rebuild": "Rebuild index",
   "rag.noResults": "No results found. Try rebuilding the index.",
@@ -418,6 +423,7 @@ const zh: LocaleStrings = {
   "activity.search": "搜索",
   "activity.git": "Git",
   "activity.ai": "AI",
+  "activity.agent": "Agent",
   "activity.rag": "RAG",
 
   // Sidebar
@@ -428,6 +434,8 @@ const zh: LocaleStrings = {
   "sidebar.aiChat": "AI 对话",
   "sidebar.aiStreaming": "流式输出中",
   "sidebar.rag": "RAG",
+  "sidebar.agent": "Agent",
+  "agent.placeholder": "描述你想让 Agent 做什么...",
   "rag.searchPlaceholder": "搜索代码库...",
   "rag.rebuild": "重建索引",
   "rag.noResults": "未找到结果。尝试重建索引。",

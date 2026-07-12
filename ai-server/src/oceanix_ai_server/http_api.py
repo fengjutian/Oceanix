@@ -180,6 +180,103 @@ async def delete_conversation(conv_id: str):
     return {"deleted": conv_id}
 
 
+# ── Agent streaming endpoint ─────────────────────────────
+
+@app.post("/agent/stream")
+async def agent_stream(request: Request):
+    """Stream agent execution step by step via SSE.
+
+    POST body: { "task": "...", "max_steps": 10, "context_files": [...] }
+
+    Events:
+        data: {"type": "plan", "steps": ["..."]}
+        data: {"type": "step", "index": 0, "description": "...", "status": "running"}
+        data: {"type": "tool_call", "step": 0, "tool": "read_file", "input": "..."}
+        data: {"type": "tool_result", "step": 0, "output": "..."}
+        data: {"type": "step", "index": 0, "status": "completed"}
+        data: {"type": "result", "summary": "..."}
+        data: {"type": "error", "message": "..."}
+    """
+    import asyncio
+    body = await request.json()
+    task = body.get("task", "")
+    max_steps = body.get("max_steps", 10)
+    context_files = body.get("context_files", [])
+
+    logger.info(f"Agent stream: {task[:80]}")
+
+    # Build task with file context
+    full_task = task
+    if context_files:
+        full_task = f"Task: {task}\nRelevant files: {', '.join(context_files)}"
+
+    async def _stream():
+        try:
+            from .agent import get_agent, AgentState
+
+            agent = get_agent()
+
+            yield f"data: {json.dumps({'type': 'status', 'status': 'planning'})}\n\n"
+
+            # Run with streaming via astream_events
+            config = {"recursion_limit": max_steps * 2}
+            initial_state: AgentState = {
+                "task": full_task,
+                "messages": [HumanMessage(content=full_task)],
+                "plan": [],
+                "current_step": 0,
+                "result": "",
+            }
+
+            last_step_idx = -1
+            async for event in agent.astream_events(initial_state, config=config, version="v2"):
+                kind = event.get("event", "")
+
+                if kind == "on_chain_start" and "plan" in event.get("name", ""):
+                    yield f"data: {json.dumps({'type': 'status', 'status': 'planning'})}\n\n"
+
+                elif kind == "on_chain_end" and "plan" in event.get("name", ""):
+                    output = event.get("data", {}).get("output", {})
+                    if isinstance(output, dict) and "plan" in output:
+                        plan = output["plan"]
+                        yield f"data: {json.dumps({'type': 'plan', 'steps': plan})}\n\n"
+
+                elif kind == "on_tool_start":
+                    tool_name = event.get("name", "unknown")
+                    tool_input = event.get("data", {}).get("input", {})
+                    yield f"data: {json.dumps({'type': 'tool_call', 'tool': tool_name, 'input': str(tool_input)[:500]})}\n\n"
+
+                elif kind == "on_tool_end":
+                    tool_name = event.get("name", "unknown")
+                    output = event.get("data", {}).get("output", "")
+                    yield f"data: {json.dumps({'type': 'tool_result', 'tool': tool_name, 'output': str(output)[:1000]})}\n\n"
+
+                elif kind == "on_chain_end" and "executor" in event.get("name", ""):
+                    output = event.get("data", {}).get("output", {})
+                    if isinstance(output, dict):
+                        idx = output.get("current_step", 0)
+                        if idx > last_step_idx:
+                            last_step_idx = idx
+                            plan = output.get("plan", [])
+                            step_desc = plan[idx - 1] if 0 < idx <= len(plan) else f"Step {idx}"
+                            yield f"data: {json.dumps({'type': 'step', 'index': idx - 1, 'description': step_desc, 'status': 'completed'})}\n\n"
+
+                elif kind == "on_chain_end" and "LangGraph" in event.get("name", ""):
+                    output = event.get("data", {}).get("output", {})
+                    if isinstance(output, dict) and "result" in output:
+                        yield f"data: {json.dumps({'type': 'result', 'summary': str(output['result'])[:2000], 'plan': output.get('plan', []), 'steps_completed': output.get('current_step', 0), 'messages': [{'role': str(m.__class__.__name__), 'content': str(m.content)[:500]} for m in output.get('messages', [])[-5:]]})}\n\n"
+
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+        except Exception as e:
+            logger.error(f"Agent stream error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        finally:
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(_stream(), media_type="text/event-stream")
+
+
 # ── Health check ─────────────────────────────────────────
 
 @app.get("/health")

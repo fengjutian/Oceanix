@@ -523,6 +523,24 @@ export async function aiChat(params: {
   return invoke("ai_chat", { params });
 }
 
+// ─── Agent ──────────────────────────────────────────
+
+export interface AgentResult {
+  status: "completed" | "error";
+  plan?: string[];
+  steps_completed?: number;
+  result?: string;
+  error?: string;
+  messages?: Array<{ role: string; content: string }>;
+}
+
+export async function agentExecute(params: {
+  task: string;
+  max_steps?: number;
+}): Promise<AgentResult> {
+  return invoke("ai_agent_execute", { params });
+}
+
 export async function aiStreamChat(
   params: {
     messages: Array<{ role: "user" | "assistant" | "system"; content: string }>;
@@ -549,6 +567,69 @@ export async function aiStreamChat(
 // ─── Conversation History ────────────────────────────
 
 const AI_HTTP = "http://127.0.0.1:11435";
+
+// ─── Agent Streaming (HTTP SSE) ──────────────────────
+
+export type AgentStreamEvent =
+  | { type: "status"; status: string }
+  | { type: "plan"; steps: string[] }
+  | { type: "step"; index: number; description: string; status: string }
+  | { type: "tool_call"; tool: string; input: string }
+  | { type: "tool_result"; tool: string; output: string }
+  | { type: "result"; summary: string; plan?: string[]; steps_completed?: number; messages?: Array<{ role: string; content: string }> }
+  | { type: "error"; message: string }
+  | { type: "done" };
+
+export async function agentExecuteStreaming(
+  params: { task: string; maxSteps?: number; contextFiles?: string[] },
+  onEvent: (event: AgentStreamEvent) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  const response = await fetch(`${AI_HTTP}/agent/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      task: params.task,
+      max_steps: params.maxSteps || 10,
+      context_files: params.contextFiles || [],
+    }),
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Agent stream failed: ${response.status}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data: ")) continue;
+
+      const data = trimmed.slice(6);
+      if (data === "[DONE]") return;
+
+      try {
+        const event = JSON.parse(data) as AgentStreamEvent;
+        onEvent(event);
+      } catch {
+        // skip unparseable events
+      }
+    }
+  }
+}
 
 export interface ConvMeta {
   id: string;

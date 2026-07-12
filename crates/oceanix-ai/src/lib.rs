@@ -104,11 +104,22 @@ impl AiBridge {
         self.ready
     }
 
-    /// Send a tool call request to the MCP sidecar
+    /// Send a tool call request to the MCP sidecar (default 30s timeout)
     pub fn send_request(
         &mut self,
         method: &str,
         params: serde_json::Value,
+    ) -> Result<AiResponse, String> {
+        self.send_request_with_timeout(method, params, Duration::from_secs(30))
+    }
+
+    /// Send a tool call request with a custom timeout.
+    /// Use for long-running operations like agent execution.
+    pub fn send_request_with_timeout(
+        &mut self,
+        method: &str,
+        params: serde_json::Value,
+        timeout: Duration,
     ) -> Result<AiResponse, String> {
         if !self.ready {
             return Err("AI sidecar not running".into());
@@ -141,7 +152,6 @@ impl AiBridge {
         }
 
         let rx = self.response_rx.as_ref().ok_or("No response channel")?;
-        let timeout = Duration::from_secs(30);
 
         loop {
             match rx.recv_timeout(timeout) {
@@ -162,7 +172,7 @@ impl AiBridge {
                     let _ = process.kill();
                     let _ = process.wait();
                     self.ready = false;
-                    return Err("AI sidecar timed out after 30s".into());
+                    return Err(format!("AI sidecar timed out after {timeout:?}"));
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     return Err("AI sidecar stdout closed unexpectedly".into());

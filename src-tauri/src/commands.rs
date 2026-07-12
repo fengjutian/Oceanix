@@ -226,6 +226,27 @@ pub fn ai_status(ai_state: State<AiState>) -> Result<bool, String> {
     Ok(ai_state.bridge.lock().map_err(|e| format!("Lock poisoned: {e}"))?.is_ready())
 }
 
+#[tauri::command]
+pub fn ai_agent_execute(params: serde_json::Value, ai_state: State<AiState>) -> Result<serde_json::Value, String> {
+    let mut bridge = ai_state.bridge.lock().map_err(|e| format!("Lock poisoned: {e}"))?;
+    if !bridge.is_ready() {
+        bridge.start().map_err(|e| format!("Failed to start AI sidecar: {e}"))?;
+    }
+    // Agent execution can take a while — use a 5-minute timeout
+    use std::time::Duration;
+    bridge.send_request_with_timeout("agent_execute", params, Duration::from_secs(300))
+        .map(|r| {
+            match oceanix_ai::flatten_mcp_result(&r.result) {
+                // FastMCP serializes dict returns as a JSON string inside the MCP content
+                Some(serde_json::Value::String(s)) => {
+                    serde_json::from_str(&s).unwrap_or(serde_json::Value::String(s))
+                }
+                Some(v) => v,
+                None => serde_json::Value::Null,
+            }
+        })
+}
+
 // ─── Search ───────────────────────────────────────────
 
 #[tauri::command]

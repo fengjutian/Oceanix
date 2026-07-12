@@ -409,3 +409,25 @@ body {
   margin: 16px 0;
 }
 .markdown-preview strong { font-weight: 600; }
+
+/* ─── Git blame ────────────────────────────────── */
+
+.blame-annotation {
+  color: #999 !important;
+  font-size: 11px !important;
+  font-style: italic !important;
+  opacity: 0.7 !important;
+}
+
+/* ─── Breakpoints ─────────────────────────────── */
+
+.bp-glyph {
+  background: #f44747 !important;
+  border-radius: 50%;
+  width: 10px !important;
+  height: 10px !important;
+  margin: 5px 0 0 5px !important;
+}
+.bp-line {
+  background: rgba(244, 71, 71, 0.15) !important;
+}

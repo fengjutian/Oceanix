@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface OutputLine {
   text: string;
@@ -11,22 +11,45 @@ const COLORS: Record<string, string> = {
   info: "var(--text-secondary)",
 };
 
-// Placeholder — will be filled from build/task output
-const DEMO_OUTPUT: OutputLine[] = [
-  { text: "[Oceanix] Ready — waiting for tasks...", channel: "info" },
-];
+// ── Global output bus ──────────────────────────
+
+type OutputListener = (line: OutputLine) => void;
+const listeners: Set<OutputListener> = new Set();
+
+export function emitOutput(text: string, channel: OutputLine["channel"] = "info") {
+  const line = { text: `[${new Date().toLocaleTimeString()}] ${text}`, channel };
+  listeners.forEach((fn) => fn(line));
+}
+
+export function clearOutput() {
+  listeners.forEach((fn) => fn({ text: "", channel: "info" }));
+}
+
+// ── Component ──────────────────────────────────
 
 export default function OutputPanel() {
-  const [lines] = useState<OutputLine[]>(DEMO_OUTPUT);
+  const [lines, setLines] = useState<OutputLine[]>([
+    { text: "[Oceanix] Output panel ready", channel: "info" },
+  ]);
+  const [clearSig, setClearSig] = useState(0);
+
+  useEffect(() => {
+    const handler: OutputListener = (line) => {
+      if (line.text === "") { setLines([]); setClearSig((n) => n + 1); return; }
+      setLines((prev) => [...prev.slice(-500), line]);
+    };
+    listeners.add(handler);
+    return () => { listeners.delete(handler); };
+  }, []);
 
   return (
     <div style={{
       height: "100%", overflow: "auto", fontSize: 12,
       fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
       padding: "4px 8px",
-    }}>
+    }} key={clearSig}>
       {lines.map((line, i) => (
-        <div key={i} style={{ color: COLORS[line.channel], lineHeight: 1.6 }}>
+        <div key={i} style={{ color: COLORS[line.channel], lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
           {line.text}
         </div>
       ))}

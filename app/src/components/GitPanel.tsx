@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { gitTagList, gitRemoteList, type GitTagEntry, type GitRemoteEntry } from "../services/api";
 
 export interface GitFileStatus {
   path: string;
@@ -73,6 +74,10 @@ export default function GitPanel({
   const [stashMsg, setStashMsg] = useState("");
   const [showStash, setShowStash] = useState(false);
   const [showLog, setShowLog] = useState(false);
+  const [showTags, setShowTags] = useState(false);
+  const [showRemotes, setShowRemotes] = useState(false);
+  const [tags, setTags] = useState<GitTagEntry[]>([]);
+  const [remotes, setRemotes] = useState<GitRemoteEntry[]>([]);
 
   const staged = files.filter((f) => f.staged);
   const changes = files.filter((f) => !f.staged && f.status !== "untracked");
@@ -142,6 +147,12 @@ export default function GitPanel({
         </button>
         <button onClick={() => { setShowLog(!showLog); if (!showLog) onLogLoad?.(); }} style={smallBtn}>
           📋
+        </button>
+        <button onClick={async () => { setShowTags(!showTags); if (!showTags) { try { setTags(await gitTagList()); } catch { setTags([]); } } }} style={smallBtn} title="Tags">
+          🏷️
+        </button>
+        <button onClick={async () => { setShowRemotes(!showRemotes); if (!showRemotes) { try { setRemotes(await gitRemoteList()); } catch { setRemotes([]); } } }} style={smallBtn} title="Remotes">
+          ☁️
         </button>
         <button onClick={onRefresh} title="Refresh" style={{ ...smallBtn, marginLeft: "auto" }}>
           ↻
@@ -287,9 +298,39 @@ export default function GitPanel({
           </div>
         )}
 
-        {files.length === 0 && !showStash && !showLog && (
+        {files.length === 0 && !showStash && !showLog && !showTags && !showRemotes && (
           <div style={{ color: "var(--text-secondary)", fontSize: 13, textAlign: "center", padding: 24 }}>
             No changes detected
+          </div>
+        )}
+
+        {/* Tags */}
+        {showTags && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
+              Tags ({tags.length})
+            </div>
+            {tags.length > 0 ? tags.map((t) => (
+              <div key={t.name} style={{ ...rowStyle, fontSize: 11, gap: 6 }}>
+                <span style={{ color: "var(--accent)", fontFamily: "monospace" }}>{t.oid.slice(0, 7)}</span>
+                <span>🏷️ {t.name}</span>
+              </div>
+            )) : <div style={{ fontSize: 11, color: "var(--text-secondary)", padding: "2px 0" }}>No tags</div>}
+          </div>
+        )}
+
+        {/* Remotes */}
+        {showRemotes && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
+              Remotes ({remotes.length})
+            </div>
+            {remotes.length > 0 ? remotes.map((r) => (
+              <div key={r.name} style={{ ...rowStyle, fontSize: 11, gap: 6 }}>
+                <span style={{ color: "var(--accent)" }}>☁️ {r.name}</span>
+                <span style={{ color: "var(--text-secondary)", fontSize: 10, overflow: "hidden", textOverflow: "ellipsis" }}>{r.url}</span>
+              </div>
+            )) : <div style={{ fontSize: 11, color: "var(--text-secondary)", padding: "2px 0" }}>No remotes</div>}
           </div>
         )}
       </div>

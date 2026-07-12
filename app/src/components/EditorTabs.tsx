@@ -2,7 +2,8 @@ import React, { useState, useCallback, useRef, useEffect, useImperativeHandle, f
 import Editor, { OnMount, DiffEditor } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import WelcomePage from "./WelcomePage";
-import { aiComplete, lspHover, lspDefinition, lspStart, lspDidOpen, lspDidChange, lspRename, lspCompletion, lspReferences, lspFormatting } from "../services/api";
+import { aiComplete, lspHover, lspDefinition, lspStart, lspDidOpen, lspDidChange, lspRename, lspCompletion, lspReferences, lspFormatting, gitBlame } from "../services/api";
+import type { GitBlameEntry } from "../services/api";
 import type { EditorSettings } from "../services/api";
 
 const LSP_LANGUAGES = new Set(["rust", "python", "typescript", "typescriptreact", "javascript"]);
@@ -80,6 +81,8 @@ export interface EditorTab {
 export interface EditorTabsHandle {
   toggleMarkdownPreview: () => void;
   openGitDiff: (original?: string) => void;
+  toggleBlame: () => void;
+  toggleBreakpoint: () => void;
 }
 
 interface EditorTabsProps {
@@ -113,6 +116,10 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
   const [diffOriginal, setDiffOriginal] = useState("");
   const [diffModified, setDiffModified] = useState("");
   const [showDiff, setShowDiff] = useState(false);
+  const [showBlame, setShowBlame] = useState(false);
+  const blameDecorationsRef = useRef<string[]>([]);
+  const [breakpoints, setBreakpoints] = useState<Set<number>>(new Set());
+  const bpDecorationsRef = useRef<string[]>([]);
 
   const lspDisposablesRef = useRef<Array<{ dispose: () => void }>>([]);
   const handleEditorMount: OnMount = useCallback(
@@ -134,8 +141,25 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
           insertSpaces: editorSettings.insertSpaces,
           wordWrap: editorSettings.wordWrap,
           minimap: { enabled: editorSettings.minimap },
+          glyphMargin: true,
         });
       }
+
+      // Breakpoint toggle on gutter click
+      editorInstance.onMouseDown((e) => {
+        if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
+            e.target.type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS) {
+          const line = e.target.position?.lineNumber;
+          if (line) {
+            setBreakpoints((prev) => {
+              const next = new Set(prev);
+              if (next.has(line)) next.delete(line);
+              else next.add(line);
+              return next;
+            });
+          }
+        }
+      });
 
       // Register LSP hover provider (only for languages with LSP support)
       const hoverDisposable = monaco.languages.registerHoverProvider("*", {
@@ -283,11 +307,75 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
     setSplitMode(null);
   }, [activeTab]);
 
+  // Update breakpoint decorations when set changes
+  useEffect(() => {
+    const editor = editorRef?.current;
+    if (!editor) return;
+    const decos = Array.from(breakpoints).map((line) => ({
+      range: new (window as any).monaco?.Range?.(line, 1, line, 1) ?? { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
+      options: {
+        isWholeLine: true,
+        glyphMarginClassName: "bp-glyph",
+        linesDecorationsClassName: "bp-line",
+      },
+    }));
+    bpDecorationsRef.current = editor.deltaDecorations(bpDecorationsRef.current, decos as any);
+  }, [breakpoints]);
+
+  const toggleBlame = useCallback(async () => {
+    if (!activeTab || !editorRef?.current) return;
+    const editor = editorRef.current;
+
+    if (showBlame) {
+      // Clear decorations
+      editor.deltaDecorations(blameDecorationsRef.current, []);
+      blameDecorationsRef.current = [];
+      setShowBlame(false);
+    } else {
+      try {
+        const entries = await gitBlame(activeTab.path);
+        const model = editor.getModel();
+        if (!model) return;
+
+        const decos = entries.map((e: GitBlameEntry, i: number) => ({
+          range: new (monacoRef.current?.Range ?? (await import("monaco-editor")).Range)(
+            e.line, 1, e.line, 1
+          ),
+          options: {
+            isWholeLine: false,
+            after: {
+              content: `  ${e.author}, ${new Date(e.time * 1000).toLocaleDateString()} • ${e.summary.slice(0, 60)}`,
+              inlineClassName: "blame-annotation",
+            },
+          },
+        }));
+
+        blameDecorationsRef.current = editor.deltaDecorations([], decos);
+        setShowBlame(true);
+      } catch { /* git blame not available */ }
+    }
+  }, [activeTab, showBlame, editorRef]);
+
+  const toggleBreakpoint = useCallback(() => {
+    const editor = editorRef?.current;
+    if (!editor) return;
+    const pos = editor.getPosition();
+    if (!pos) return;
+    setBreakpoints((prev) => {
+      const next = new Set(prev);
+      if (next.has(pos.lineNumber)) next.delete(pos.lineNumber);
+      else next.add(pos.lineNumber);
+      return next;
+    });
+  }, [editorRef]);
+
   // Expose methods to parent
   useImperativeHandle(ref, () => ({
     toggleMarkdownPreview,
     openGitDiff,
-  }), [toggleMarkdownPreview, openGitDiff]);
+    toggleBlame,
+    toggleBreakpoint,
+  }), [toggleMarkdownPreview, openGitDiff, toggleBlame, toggleBreakpoint]);
 
   // ─── LSP lifecycle ──────────────────────────────────
   const lspVersionRef = useRef(1);
@@ -302,6 +390,7 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
 
     lspStart(lang, projectRoot).catch(() => {});
     lspDidOpen(lang, activeTab.path, activeTab.content).catch(() => {});
+    import("./OutputPanel").then((m) => m.emitOutput(`LSP: ${lang} started for ${activeTab.path}`, "info"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab?.language, activeTab?.path, projectRoot]);
 

@@ -36,6 +36,7 @@ const DEFAULT_BINDINGS: KeyBinding[] = [
   { key: "Shift+Alt+F", command: "editor.format", label: "Format Document" },
   { key: "Ctrl+Shift+V", command: "markdown.preview", label: "Markdown Preview" },
   { key: "Shift+F12", command: "editor.goToReferences", label: "Go to References" },
+  { key: "F9", command: "editor.toggleBreakpoint", label: "Toggle Breakpoint" },
 ];
 
 function App() {
@@ -351,6 +352,12 @@ function App() {
       },
     },
     {
+      id: "git.toggleBlame",
+      label: "Toggle Git Blame Annotations",
+      category: "Git",
+      action: () => editorHandleRef.current?.toggleBlame(),
+    },
+    {
       id: "editor.splitRight",
       label: "Split Editor Right",
       category: "View",
@@ -393,6 +400,13 @@ function App() {
       action: () => {
         editorRef.current?.getAction("editor.action.goToReferences")?.run();
       },
+    },
+    {
+      id: "editor.toggleBreakpoint",
+      label: "Toggle Breakpoint",
+      category: "Debug",
+      keybinding: "F9",
+      action: () => editorHandleRef.current?.toggleBreakpoint(),
     },
   ], [activeTabId, saveTab, closeTab, openTab]);
 

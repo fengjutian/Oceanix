@@ -90,6 +90,17 @@ pub struct CompletionList {
     pub items: Vec<CompletionItem>,
 }
 
+/// Document symbol (outline entry).
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SymbolInfo {
+    pub name: String,
+    pub kind: u32,
+    #[serde(default)]
+    pub location: Option<Location>,
+    #[serde(default)]
+    pub children: Option<Vec<SymbolInfo>>,
+}
+
 /// Flat text edit for rename results.
 #[derive(Debug, Clone, Serialize)]
 pub struct TextEdit {
@@ -390,6 +401,23 @@ impl LspClient {
                     }).collect()
                 })
                 .map_err(|e| format!("parse formatting: {e}"))
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    /// Request document symbols (outline).
+    pub fn document_symbol(&mut self, uri: &str) -> Result<Vec<SymbolInfo>, String> {
+        let params = serde_json::json!({
+            "textDocument": { "uri": uri }
+        });
+        let resp = self.send_request("textDocument/documentSymbol", params)?;
+        if let Some(result) = resp.result {
+            if result.is_null() {
+                return Ok(vec![]);
+            }
+            serde_json::from_value::<Vec<SymbolInfo>>(result)
+                .map_err(|e| format!("parse symbols: {e}"))
         } else {
             Ok(vec![])
         }

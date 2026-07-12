@@ -1006,6 +1006,33 @@ pub fn lsp_formatting(language_id: String, path: String, tab_size: u32, insert_s
     }).collect())
 }
 
+#[derive(Serialize)]
+pub struct LspSymbol {
+    name: String,
+    kind: u32,
+    line: u32,
+    column: u32,
+    children: Vec<LspSymbol>,
+}
+
+fn flatten_symbols(symbols: Vec<oceanix_lsp::SymbolInfo>) -> Vec<LspSymbol> {
+    symbols.into_iter().map(|s| {
+        let children = flatten_symbols(s.children.unwrap_or_default());
+        let line = s.location.as_ref().map(|l| l.range.start.line).unwrap_or(0);
+        let column = s.location.as_ref().map(|l| l.range.start.character).unwrap_or(0);
+        LspSymbol { name: s.name, kind: s.kind, line, column, children }
+    }).collect()
+}
+
+#[tauri::command]
+pub fn lsp_document_symbol(language_id: String, path: String, state: tauri::State<'_, crate::LspState>) -> Result<Vec<LspSymbol>, String> {
+    let mut clients = state.clients.lock().map_err(|e| format!("lock: {e}"))?;
+    let client = clients.get_mut(&language_id).ok_or("LSP not started")?;
+    let uri = format!("file://{}", path.replace('\\', "/"));
+    let symbols = client.document_symbol(&uri)?;
+    Ok(flatten_symbols(symbols))
+}
+
 // ─── Plugin Registry ────────────────────────────────
 
 #[tauri::command]

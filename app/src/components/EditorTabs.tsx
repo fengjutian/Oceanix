@@ -11,6 +11,63 @@ function isLspLanguage(lang: string): boolean {
   return LSP_LANGUAGES.has(lang);
 }
 
+// ─── Markdown renderer ─────────────────────────────
+
+function renderMarkdown(md: string): string {
+  // Escape HTML in non-code content
+  let html = md
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  // Fenced code blocks: ```lang\n...\n```
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_m: string, lang: string, code: string) => {
+    const cls = lang ? ` class="language-${lang}"` : "";
+    return `<pre><code${cls}>${code.trim()}</code></pre>`;
+  });
+
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+  // Headers
+  html = html.replace(/^#### (.+)$/gm, "<h4>$1</h4>");
+  html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
+  html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
+  html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
+
+  // Bold / italic
+  html = html.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
+
+  // Unordered lists
+  html = html.replace(/^[-*] (.+)$/gm, "<li>$1</li>");
+  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, "<ul>$1</ul>");
+
+  // Ordered lists
+  html = html.replace(/^\d+\. (.+)$/gm, "<li>$1</li>");
+
+  // Horizontal rules
+  html = html.replace(/^---$/gm, "<hr/>");
+
+  // Blockquotes
+  html = html.replace(/^&gt; (.+)$/gm, "<blockquote>$1</blockquote>");
+
+  // Paragraphs: double newlines → paragraphs
+  html = html.replace(/\n\n/g, "</p><p>");
+  html = "<p>" + html + "</p>";
+
+  // Clean up empty paragraphs
+  html = html.replace(/<p><\/p>/g, "");
+  html = html.replace(/<p>(<h[1-6]|<\/?ul|<\/?ol|<\/?li|<\/?pre|<\/?blockquote|<\/?hr)/g, "$1");
+  html = html.replace(/(<\/h[1-6]>|<\/ul>|<\/ol>|<\/pre>|<\/blockquote>|<\/?hr[^>]*>)\s*<\/p>/g, "$1");
+
+  // Line breaks within paragraphs
+  html = html.replace(/\n/g, "<br/>");
+
+  return html;
+}
+
 export interface EditorTab {
   id: string;
   path: string;
@@ -369,20 +426,12 @@ const EditorTabs = forwardRef<EditorTabsHandle, EditorTabsProps>(function Editor
         {splitMode === "markdown" && activeTab && (
           <>
             <div style={{ width: 4, cursor: "col-resize", background: "var(--border-color)" }} />
-            <div style={{ flex: 0.5, minWidth: 0, height: "100%", overflow: "auto",
+            <div className="markdown-preview" style={{ flex: 0.5, minWidth: 0, height: "100%", overflow: "auto",
               padding: "12px 16px", background: "var(--bg-primary)", color: "var(--text-primary)",
               fontFamily: "system-ui, sans-serif", fontSize: 14, lineHeight: 1.7,
             }}
               dangerouslySetInnerHTML={{
-                __html: activeTab.content
-                  .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-                  .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-                  .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-                  .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                  .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                  .replace(/`([^`]+)`/g, '<code>$1</code>')
-                  .replace(/\n\n/g, '<br/><br/>')
-                  .replace(/\n/g, '<br/>')
+                __html: renderMarkdown(activeTab.content)
               }}
             />
           </>

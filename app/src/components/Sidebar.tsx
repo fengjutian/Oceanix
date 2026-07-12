@@ -2,6 +2,7 @@ import { FileTree, FileNode } from "@oceanix/file-tree";
 import { EditorTab } from "./EditorTabs";
 import GitPanel, { GitFileStatus, GitStashInfo, GitCommitInfo } from "./GitPanel";
 import ChatPanel from "./ChatPanel";
+import OutlinePanel from "./OutlinePanel";
 import { useState, useCallback, useEffect } from "react";
 import {
   readDir, readFile, readFileBase64, gitStatus, gitBranchName, gitCommit,
@@ -27,7 +28,7 @@ interface SidebarProps {
   /** Selected code context to pre-fill in AI chat */
   selectionContext?: { code: string; file: string; language: string } | null;
   /** Current editor context sent with each chat message */
-  editorContext?: { openFiles: string[]; activeFile: string } | null;
+  editorContext?: { openFiles: string[]; activeFile: string; activeLanguage?: string } | null;
 }
 
 function flattenFiles(node: FileNode): Array<{ path: string; name: string }> {
@@ -514,6 +515,30 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
                 Open a folder to see files
               </div>
             )}
+          </div>
+
+          {/* Outline */}
+          <div style={{
+            borderTop: "1px solid var(--border-color)",
+            marginTop: 4, padding: "4px 0",
+            maxHeight: "35%", overflow: "auto",
+          }}>
+            <div style={{
+              padding: "4px 8px", fontSize: 11, fontWeight: 600,
+              color: "var(--text-secondary)", textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}>Outline</div>
+            <OutlinePanel
+              language={editorContext?.activeLanguage}
+              filePath={editorContext?.activeFile}
+              onGoToSymbol={(line) => {
+                // Focus the line in the editor
+                const ed = document.querySelector(".monaco-editor") as any;
+                ed?.__monaco_editor?.revealLineInCenter?.(line + 1);
+                ed?.__monaco_editor?.setPosition?.({ lineNumber: line + 1, column: 1 });
+                ed?.__monaco_editor?.focus?.();
+              }}
+            />
           </div>
 
           {/* Context menu */}

@@ -158,6 +158,7 @@ pub fn run() {
             commands::lsp_completion,
             commands::lsp_references,
             commands::lsp_formatting,
+            commands::lsp_document_symbol,
             commands::plugin_list,
             commands::plugin_contributions,
             commands::get_cwd,

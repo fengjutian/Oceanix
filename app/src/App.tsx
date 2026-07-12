@@ -5,6 +5,7 @@ import StatusBar from "./components/StatusBar";
 import ActivityBar from "./components/ActivityBar";
 import EditorTabs, { EditorTab, type EditorTabsHandle } from "./components/EditorTabs";
 import Terminal from "./components/Terminal";
+import TerminalPanel from "./components/TerminalPanel";
 import GitPanel from "./components/GitPanel";
 import ProblemsPanel from "./components/ProblemsPanel";
 import OutputPanel from "./components/OutputPanel";
@@ -617,6 +618,7 @@ function App() {
                   editorContext={{
                     openFiles: tabs.map((t) => t.path),
                     activeFile: activeTab?.path ?? "",
+                    activeLanguage: activeTab?.language,
                   }}
                 />
               </Panel>
@@ -691,7 +693,7 @@ function App() {
                         )})}
                       </div>
                       <div className="panel-content">
-                        {panelTab === "terminal" && <Terminal id="main" />}
+                        {panelTab === "terminal" && <TerminalPanel />}
                         {panelTab === "problems" && <ProblemsPanel onOpenFile={openTab} />}
                         {panelTab === "output" && <OutputPanel />}
                       </div>

@@ -465,6 +465,18 @@ export async function lspFormatting(
   return invoke("lsp_formatting", { languageId, path, tabSize, insertSpaces });
 }
 
+export interface LspSymbol {
+  name: string;
+  kind: number;
+  line: number;
+  column: number;
+  children: LspSymbol[];
+}
+
+export async function lspDocumentSymbol(languageId: string, path: string): Promise<LspSymbol[]> {
+  return invoke("lsp_document_symbol", { languageId, path });
+}
+
 // ─── Plugins ─────────────────────────────────────────
 
 export async function pluginList(): Promise<Array<{

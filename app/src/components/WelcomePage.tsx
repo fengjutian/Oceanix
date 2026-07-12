@@ -83,7 +83,7 @@ export default function WelcomePage() {
             icon={<Settings size={18} />}
             label="Settings"
             shortcut="Ctrl+,"
-            onClick={() => executeCommand("palette.show")}
+            onClick={() => executeCommand("settings.open")}
           />
           <ActionCard
             icon={<Terminal size={18} />}

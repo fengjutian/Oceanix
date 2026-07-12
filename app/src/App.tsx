@@ -290,6 +290,7 @@ function App() {
     registerGlobalCommand("panel.toggle", () => handler("panel.toggle"));
     registerGlobalCommand("palette.show", () => handler("palette.show"));
     registerGlobalCommand("theme.toggle", () => handler("theme.toggle"));
+    registerGlobalCommand("settings.open", () => handler("settings.open"));
 
     registry.attach();
     return () => registry.detach();

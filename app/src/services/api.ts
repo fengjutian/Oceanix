@@ -150,6 +150,17 @@ export async function gitStatus(): Promise<Array<{ path: string; status: string;
   return invoke("git_status");
 }
 
+export interface GitStatusGrouped {
+  staged: Array<{ path: string; status: string; staged: boolean }>;
+  changes: Array<{ path: string; status: string; staged: boolean }>;
+  merge: Array<{ path: string; status: string; staged: boolean }>;
+  untracked: Array<{ path: string; status: string; staged: boolean }>;
+}
+
+export async function gitStatusGrouped(): Promise<GitStatusGrouped> {
+  return invoke("git_status_grouped");
+}
+
 export async function gitDiff(path?: string, staged?: boolean): Promise<string> {
   return invoke("git_diff", { path, staged });
 }
@@ -772,7 +783,8 @@ export async function searchInFiles(params: {
   regex?: boolean;
   caseSensitive?: boolean;
   wholeWord?: boolean;
-}): Promise<Array<{ file: string; line: number; column: number; text: string }>> {
+  surroundingContext?: number;
+}): Promise<{ matches: Array<{ file: string; line: number; column: number; text: string; match_start: number; match_end: number; context_before: Array<[number, string]>; context_after: Array<[number, string]> }>; limit_hit: boolean }> {
   return invoke("search_files", { params });
 }
 

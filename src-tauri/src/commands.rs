@@ -261,10 +261,11 @@ pub fn ai_agent_execute(params: serde_json::Value, ai_state: State<AiState>) -> 
 // ─── Search ───────────────────────────────────────────
 
 #[tauri::command]
-pub fn search_files(params: serde_json::Value) -> Result<Vec<serde_json::Value>, String> {
+pub fn search_files(params: serde_json::Value) -> Result<serde_json::Value, String> {
     let query = params["query"].as_str().unwrap_or("");
     let path = params["path"].as_str().unwrap_or(".");
     let max = params.get("max_results").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
+    let ctx = params.get("surrounding_context").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
 
     let search_params = oceanix_search::SearchParams {
         query: query.to_string(),
@@ -273,17 +274,35 @@ pub fn search_files(params: serde_json::Value) -> Result<Vec<serde_json::Value>,
         case_sensitive: params.get("case_sensitive").and_then(|v| v.as_bool()).unwrap_or(false),
         whole_word: params.get("whole_word").and_then(|v| v.as_bool()).unwrap_or(false),
         max_results: max,
+        surrounding_context: ctx,
     };
 
     let engine = oceanix_search::SearchEngine::new(path);
-    let results = engine.search(&search_params);
+    let result = engine.search(&search_params);
 
-    Ok(results.into_iter().map(|m| serde_json::json!({
-        "file": m.file_path,
-        "line": m.line_number,
-        "column": m.column,
-        "text": m.line_text,
-    })).collect())
+    let matches: Vec<serde_json::Value> = result.matches.into_iter().map(|m| {
+        let ctx_before: Vec<serde_json::Value> = m.context_before.into_iter().map(|(ln, txt)| {
+            serde_json::json!([ln, txt])
+        }).collect();
+        let ctx_after: Vec<serde_json::Value> = m.context_after.into_iter().map(|(ln, txt)| {
+            serde_json::json!([ln, txt])
+        }).collect();
+        serde_json::json!({
+            "file": m.file_path,
+            "line": m.line_number,
+            "column": m.column,
+            "text": m.line_text,
+            "match_start": m.match_start,
+            "match_end": m.match_end,
+            "context_before": ctx_before,
+            "context_after": ctx_after,
+        })
+    }).collect();
+
+    Ok(serde_json::json!({
+        "matches": matches,
+        "limit_hit": result.limit_hit,
+    }))
 }
 
 // ─── Terminal ────────────────────────────────────────
@@ -414,7 +433,7 @@ pub struct GitBlameEntry {
 fn repo_from_state(state: &tauri::State<'_, crate::GitState>) -> Result<GitRepo, String> {
     let guard = state.project_root.lock().map_err(|e| format!("lock: {e}"))?;
     let root = guard.as_ref().ok_or_else(|| "No project root".to_string())?;
-    GitRepo::open(root)
+    GitRepo::open(root).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -431,19 +450,53 @@ pub fn git_status(state: tauri::State<'_, crate::GitState>) -> Result<Vec<GitSta
                 oceanix_git::StatusKind::Added => "added".into(),
                 oceanix_git::StatusKind::Deleted => "deleted".into(),
                 oceanix_git::StatusKind::Untracked => "untracked".into(),
+            oceanix_git::StatusKind::Conflicted => "conflicted".into(),
             },
             staged: f.staged,
         })
         .collect())
 }
 
+#[derive(serde::Serialize)]
+pub(crate) struct GitStatusGrouped {
+    staged: Vec<GitStatusEntry>,
+    changes: Vec<GitStatusEntry>,
+    merge: Vec<GitStatusEntry>,
+    untracked: Vec<GitStatusEntry>,
+}
+
+#[tauri::command]
+pub fn git_status_grouped(state: tauri::State<'_, crate::GitState>) -> Result<GitStatusGrouped, String> {
+    let repo = repo_from_state(&state)?;
+    let groups = repo.status_grouped()?;
+    let map = |v: Vec<oceanix_git::FileStatus>| -> Vec<GitStatusEntry> {
+        v.into_iter().map(|f| GitStatusEntry {
+            path: f.path,
+            status: match f.status {
+                oceanix_git::StatusKind::Modified => "modified".into(),
+                oceanix_git::StatusKind::Added => "added".into(),
+                oceanix_git::StatusKind::Deleted => "deleted".into(),
+                oceanix_git::StatusKind::Untracked => "untracked".into(),
+                oceanix_git::StatusKind::Conflicted => "conflicted".into(),
+            },
+            staged: f.staged,
+        }).collect()
+    };
+    Ok(GitStatusGrouped {
+        staged: map(groups.staged),
+        changes: map(groups.changes),
+        merge: map(groups.merge),
+        untracked: map(groups.untracked),
+    })
+}
+
 #[tauri::command]
 pub fn git_diff(path: Option<String>, staged: Option<bool>, state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
     let repo = repo_from_state(&state)?;
     if staged.unwrap_or(false) {
-        repo.diff_staged()
+        Ok(repo.diff_staged()?)
     } else {
-        repo.diff(path.as_deref())
+        Ok(repo.diff(path.as_deref())?)
     }
 }
 
@@ -451,19 +504,19 @@ pub fn git_diff(path: Option<String>, staged: Option<bool>, state: tauri::State<
 #[tauri::command]
 pub fn git_show(path: String, state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
     let repo = repo_from_state(&state)?;
-    repo.show(&path)
+    Ok(repo.show(&path)?)
 }
 
 #[tauri::command]
 pub fn git_commit(message: String, state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
     let repo = repo_from_state(&state)?;
-    repo.commit(&message)
+    Ok(repo.commit(&message)?)
 }
 
 #[tauri::command]
 pub fn git_branch_name(state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
     let repo = repo_from_state(&state)?;
-    repo.branch_name()
+    Ok(repo.branch_name()?)
 }
 
 #[tauri::command]
@@ -479,43 +532,43 @@ pub fn git_branches(state: tauri::State<'_, crate::GitState>) -> Result<Vec<GitB
 #[tauri::command]
 pub fn git_stage(path: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.stage(&path)
+    Ok(repo.stage(&path)?)
 }
 
 #[tauri::command]
 pub fn git_unstage(path: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.unstage(&path)
+    Ok(repo.unstage(&path)?)
 }
 
 #[tauri::command]
 pub fn git_push(branch: String, remote: Option<String>, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.push(remote.as_deref().unwrap_or("origin"), &branch)
+    Ok(repo.push(remote.as_deref().unwrap_or("origin"), &branch)?)
 }
 
 #[tauri::command]
 pub fn git_pull(branch: String, remote: Option<String>, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.pull(remote.as_deref().unwrap_or("origin"), &branch)
+    Ok(repo.pull(remote.as_deref().unwrap_or("origin"), &branch)?)
 }
 
 #[tauri::command]
 pub fn git_create_branch(name: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.create_branch(&name)
+    Ok(repo.create_branch(&name)?)
 }
 
 #[tauri::command]
 pub fn git_switch_branch(name: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.switch_branch(&name)
+    Ok(repo.switch_branch(&name)?)
 }
 
 #[tauri::command]
 pub fn git_delete_branch(name: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.delete_branch(&name)
+    Ok(repo.delete_branch(&name)?)
 }
 
 // ─── New: Log ──────────────────────────────────────
@@ -559,7 +612,7 @@ pub fn git_log_file(path: String, count: usize, state: tauri::State<'_, crate::G
 #[tauri::command]
 pub fn git_commit_detail(oid: String, state: tauri::State<'_, crate::GitState>) -> Result<serde_json::Value, String> {
     let repo = repo_from_state(&state)?;
-    let (info, diff) = repo.commit_detail(&oid)?;
+    let info = repo.commit_detail(&oid)?;
     Ok(serde_json::json!({
         "info": {
             "oid": info.oid,
@@ -570,7 +623,7 @@ pub fn git_commit_detail(oid: String, state: tauri::State<'_, crate::GitState>) 
             "time": info.time,
             "timeOffset": info.time_offset,
         },
-        "diff": diff,
+        "diff": "",
     }))
 }
 
@@ -579,7 +632,8 @@ pub fn git_commit_detail(oid: String, state: tauri::State<'_, crate::GitState>) 
 #[tauri::command]
 pub fn git_stash_save(message: Option<String>, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let mut repo = repo_from_state(&state)?;
-    repo.stash_save(message.as_deref())
+    repo.stash_save(message.as_deref())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -595,19 +649,19 @@ pub fn git_stash_list(state: tauri::State<'_, crate::GitState>) -> Result<Vec<Gi
 #[tauri::command]
 pub fn git_stash_pop(index: usize, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let mut repo = repo_from_state(&state)?;
-    repo.stash_pop(index)
+    Ok(repo.stash_pop(index)?)
 }
 
 #[tauri::command]
 pub fn git_stash_apply(index: usize, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let mut repo = repo_from_state(&state)?;
-    repo.stash_apply(index)
+    Ok(repo.stash_apply(index)?)
 }
 
 #[tauri::command]
 pub fn git_stash_drop(index: usize, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let mut repo = repo_from_state(&state)?;
-    repo.stash_drop(index)
+    Ok(repo.stash_drop(index)?)
 }
 
 // ─── New: Fetch ────────────────────────────────────
@@ -615,7 +669,7 @@ pub fn git_stash_drop(index: usize, state: tauri::State<'_, crate::GitState>) ->
 #[tauri::command]
 pub fn git_fetch(remote: Option<String>, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.fetch(remote.as_deref().unwrap_or("origin"))
+    Ok(repo.fetch(remote.as_deref().unwrap_or("origin"))?)
 }
 
 // ─── New: Discard ──────────────────────────────────
@@ -623,7 +677,7 @@ pub fn git_fetch(remote: Option<String>, state: tauri::State<'_, crate::GitState
 #[tauri::command]
 pub fn git_discard(path: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.discard(&path)
+    Ok(repo.discard(&path)?)
 }
 
 // ─── New: Reset ────────────────────────────────────
@@ -631,7 +685,7 @@ pub fn git_discard(path: String, state: tauri::State<'_, crate::GitState>) -> Re
 #[tauri::command]
 pub fn git_reset(oid: String, mode: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.reset(&oid, &mode)
+    Ok(repo.reset(&oid, &mode)?)
 }
 
 // ─── New: Revert ───────────────────────────────────
@@ -639,7 +693,7 @@ pub fn git_reset(oid: String, mode: String, state: tauri::State<'_, crate::GitSt
 #[tauri::command]
 pub fn git_revert(oid: String, state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
     let repo = repo_from_state(&state)?;
-    repo.revert(&oid)
+    Ok(repo.revert(&oid).map(|_| format!("Reverted {oid}"))?)
 }
 
 // ─── New: Cherry-pick ──────────────────────────────
@@ -647,7 +701,7 @@ pub fn git_revert(oid: String, state: tauri::State<'_, crate::GitState>) -> Resu
 #[tauri::command]
 pub fn git_cherry_pick(oid: String, state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
     let repo = repo_from_state(&state)?;
-    repo.cherry_pick(&oid)
+    Ok(repo.cherry_pick(&oid).map(|_| format!("Cherry-picked {oid}"))?)
 }
 
 // ─── New: Merge ────────────────────────────────────
@@ -655,7 +709,7 @@ pub fn git_cherry_pick(oid: String, state: tauri::State<'_, crate::GitState>) ->
 #[tauri::command]
 pub fn git_merge_branch(branch: String, state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
     let repo = repo_from_state(&state)?;
-    repo.merge_branch(&branch)
+    Ok(repo.merge_branch(&branch)?)
 }
 
 // ─── New: Rebase ───────────────────────────────────
@@ -663,7 +717,7 @@ pub fn git_merge_branch(branch: String, state: tauri::State<'_, crate::GitState>
 #[tauri::command]
 pub fn git_rebase(onto: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.rebase(&onto)
+    Ok(repo.rebase(&onto)?)
 }
 
 // ─── New: Tags ─────────────────────────────────────
@@ -681,13 +735,13 @@ pub fn git_tag_list(state: tauri::State<'_, crate::GitState>) -> Result<Vec<GitT
 #[tauri::command]
 pub fn git_tag_create(name: String, message: Option<String>, state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
     let repo = repo_from_state(&state)?;
-    repo.tag_create(&name, message.as_deref())
+    Ok(repo.tag_create(&name, message.as_deref())?)
 }
 
 #[tauri::command]
 pub fn git_tag_delete(name: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.tag_delete(&name)
+    Ok(repo.tag_delete(&name)?)
 }
 
 // ─── New: Remote management ────────────────────────
@@ -705,13 +759,13 @@ pub fn git_remote_list(state: tauri::State<'_, crate::GitState>) -> Result<Vec<G
 #[tauri::command]
 pub fn git_remote_add(name: String, url: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.remote_add(&name, &url)
+    Ok(repo.remote_add(&name, &url)?)
 }
 
 #[tauri::command]
 pub fn git_remote_remove(name: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.remote_remove(&name)
+    Ok(repo.remote_remove(&name)?)
 }
 
 // ─── New: Blame ────────────────────────────────────
@@ -737,13 +791,13 @@ pub fn git_blame(path: String, state: tauri::State<'_, crate::GitState>) -> Resu
 
 #[tauri::command]
 pub fn git_init(path: String) -> Result<String, String> {
-    let _repo = GitRepo::init(&path)?;
+    let _repo = GitRepo::init(&path).map_err(|e| e.to_string())?;
     Ok(format!("Initialized empty Git repository in {}", path))
 }
 
 #[tauri::command]
 pub fn git_clone(url: String, path: String) -> Result<String, String> {
-    let _repo = GitRepo::clone(&url, &path)?;
+    let _repo = GitRepo::clone(&url, &path).map_err(|e| e.to_string())?;
     Ok(format!("Cloned {} into {}", url, path))
 }
 
@@ -752,13 +806,13 @@ pub fn git_clone(url: String, path: String) -> Result<String, String> {
 #[tauri::command]
 pub fn git_config_get(key: String, state: tauri::State<'_, crate::GitState>) -> Result<String, String> {
     let repo = repo_from_state(&state)?;
-    repo.config_get(&key)
+    Ok(repo.config_get(&key)?)
 }
 
 #[tauri::command]
 pub fn git_config_set(key: String, value: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.config_set(&key, &value)
+    Ok(repo.config_set(&key, &value)?)
 }
 
 // ─── New: Conflicts ────────────────────────────────
@@ -766,19 +820,19 @@ pub fn git_config_set(key: String, value: String, state: tauri::State<'_, crate:
 #[tauri::command]
 pub fn git_has_conflicts(state: tauri::State<'_, crate::GitState>) -> Result<bool, String> {
     let repo = repo_from_state(&state)?;
-    repo.has_conflicts()
+    Ok(repo.has_conflicts()?)
 }
 
 #[tauri::command]
 pub fn git_conflict_files(state: tauri::State<'_, crate::GitState>) -> Result<Vec<String>, String> {
     let repo = repo_from_state(&state)?;
-    repo.conflict_files()
+    Ok(repo.conflict_files()?)
 }
 
 #[tauri::command]
 pub fn git_resolve_conflict(path: String, state: tauri::State<'_, crate::GitState>) -> Result<(), String> {
     let repo = repo_from_state(&state)?;
-    repo.resolve_conflict(&path)
+    Ok(repo.resolve_conflict(&path)?)
 }
 
 #[tauri::command]

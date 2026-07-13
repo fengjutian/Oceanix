@@ -85,6 +85,10 @@ export interface SearchMatch {
   matchStart: number;
   /** 0-based byte offset of the match end within lineText. */
   matchEnd: number;
+  /** Context lines before this match: [lineNumber, text][]. */
+  contextBefore: Array<[number, string]>;
+  /** Context lines after this match: [lineNumber, text][]. */
+  contextAfter: Array<[number, string]>;
 }
 
 /**
@@ -127,4 +131,18 @@ export interface RawSearchMatch {
   line: number;
   column: number;
   text: string;
+  match_start: number;
+  match_end: number;
+  /** Context lines before the match: [line_number, text][] */
+  context_before: Array<[number, string]>;
+  /** Context lines after the match: [line_number, text][] */
+  context_after: Array<[number, string]>;
+}
+
+/**
+ * Raw search response from the Tauri backend.
+ */
+export interface RawSearchResponse {
+  matches: RawSearchMatch[];
+  limit_hit: boolean;
 }

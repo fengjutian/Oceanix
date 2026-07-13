@@ -4,7 +4,7 @@ import { gitTagList, gitRemoteList, type GitTagEntry, type GitRemoteEntry } from
 
 export interface GitFileStatus {
   path: string;
-  status: "modified" | "added" | "deleted" | "untracked";
+  status: "modified" | "added" | "deleted" | "untracked" | "conflicted";
   staged: boolean;
 }
 
@@ -54,6 +54,7 @@ const STATUS_COLORS: Record<string, string> = {
   added: "#4ec9b0",
   deleted: "#f44747",
   untracked: "#6a9955",
+  conflicted: "#f44747",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -61,6 +62,7 @@ const STATUS_LABELS: Record<string, string> = {
   added: "A",
   deleted: "D",
   untracked: "U",
+  conflicted: "!",
 };
 
 export default function GitPanel({
@@ -81,7 +83,8 @@ export default function GitPanel({
   const [remotes, setRemotes] = useState<GitRemoteEntry[]>([]);
 
   const staged = files.filter((f) => f.staged);
-  const changes = files.filter((f) => !f.staged && f.status !== "untracked");
+  const changes = files.filter((f) => !f.staged && f.status !== "untracked" && f.status !== "conflicted");
+  const merge = files.filter((f) => f.status === "conflicted");
   const untracked = files.filter((f) => f.status === "untracked");
 
   const doCommit = () => {
@@ -202,10 +205,21 @@ export default function GitPanel({
             if (e.key === "Enter" && e.ctrlKey && message.trim()) doCommit();
           }}
         />
-        <div style={{ marginTop: 4, display: "flex", gap: 6 }}>
-          <button style={accentBtn} onClick={doCommit}>
+        <div style={{ marginTop: 4, display: "flex", gap: 6, alignItems: "center" }}>
+          <button style={accentBtn} onClick={doCommit} disabled={!message.trim()}>
             ✓ Commit
           </button>
+          {message && (
+            <span style={{
+              fontSize: 11,
+              color: message.split("\n")[0].length > 50 ? "#e2b714" : "var(--text-secondary)",
+              fontFamily: "monospace",
+            }}>
+              {message.split("\n")[0].length}
+              {message.includes("\n") ? ` / ${message.length}` : ""}
+              {message.split("\n")[0].length > 50 && " ⚠ Subject > 50 chars"}
+            </span>
+          )}
         </div>
       </div>
 
@@ -265,6 +279,18 @@ export default function GitPanel({
             </div>
             {staged.map((f) => (
               <FileRow key={f.path} file={f} onStage={onStageFile} onDiscard={onDiscardFile} />
+            ))}
+          </div>
+        )}
+
+        {/* Merge conflicts */}
+        {merge.length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#f44747", marginBottom: 4 }}>
+              Merge Changes ({merge.length})
+            </div>
+            {merge.map((f) => (
+              <FileRow key={f.path} file={f} onStage={onStageFile} onDiscard={onDiscardFile} isConflict />
             ))}
           </div>
         )}
@@ -339,10 +365,11 @@ export default function GitPanel({
   );
 }
 
-function FileRow({ file, onStage, onDiscard }: {
+function FileRow({ file, onStage, onDiscard, isConflict }: {
   file: GitFileStatus;
   onStage?: (path: string) => void;
   onDiscard?: (path: string) => void;
+  isConflict?: boolean;
 }) {
   return (
     <div style={rowStyle}>
@@ -355,13 +382,22 @@ function FileRow({ file, onStage, onDiscard }: {
       <span style={{ fontSize: 10, color: "var(--text-secondary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginLeft: 4 }}>
         {file.path}
       </span>
-      {onStage && (
+      {onStage && !isConflict && (
         <button
           onClick={(e) => { e.stopPropagation(); onStage(file.path); }}
           title={!file.staged ? "Stage" : "Unstage"}
           style={{ ...smallBtn, padding: "0 6px", fontSize: 10, flexShrink: 0 }}
         >
           {!file.staged ? "+" : "−"}
+        </button>
+      )}
+      {onStage && isConflict && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onStage(file.path); }}
+          title="Mark as resolved"
+          style={{ ...smallBtn, padding: "0 6px", fontSize: 10, color: "#4ec9b0", flexShrink: 0 }}
+        >
+          ✓
         </button>
       )}
       {onDiscard && file.status !== "untracked" && (

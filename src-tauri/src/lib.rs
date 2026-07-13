@@ -109,6 +109,7 @@ pub fn run() {
             commands::terminal_kill,
             commands::recent_projects,
             commands::git_status,
+            commands::git_status_grouped,
             commands::git_diff,
             commands::git_show,
             commands::git_commit,

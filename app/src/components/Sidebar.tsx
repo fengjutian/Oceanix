@@ -2,6 +2,7 @@ import { EditorTab } from "./EditorTabs";
 import FileExplorer from "./FileExplorer";
 import GitPanel, { GitFileStatus, GitStashInfo, GitCommitInfo } from "./GitPanel";
 import ChatPanel from "./ChatPanel";
+import SearchPanel from "./SearchPanel";
 import { useState, useCallback, useEffect } from "react";
 import {
   readFile, readFileBase64, gitStatus, gitBranchName, gitCommit,
@@ -9,7 +10,6 @@ import {
   gitPush, gitPull, gitFetch, gitCreateBranch, gitDiscard,
   gitStashSave, gitStashList, gitStashPop, gitStashApply, gitStashDrop,
   gitLog,
-  searchInFiles,
   ragSearch, ragRebuild,
 } from "../services/api";
 import type { RAGResult } from "../services/api";
@@ -34,8 +34,6 @@ interface SidebarProps {
 
 export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, onFileTreeLoaded, selectionContext, editorContext, onOpenInAgent }: SidebarProps) {
   const { t } = useLocale();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Array<{ file: string; line: number; text: string }>>([]);
 
   // Git state
   const [gitFiles, setGitFiles] = useState<GitFileStatus[]>([]);
@@ -263,25 +261,6 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
     try { setGitLogEntries(await gitLog(30).catch(() => [] as GitCommitInfo[])); } catch { /* ignore */ }
   }, []);
 
-  // ─── Search ───────────────────────────────────────
-
-  const handleSearch = useCallback(async (q?: string) => {
-    const query = q ?? searchQuery;
-    if (!query.trim()) { setSearchResults([]); return; }
-    try {
-      const results = await searchInFiles({
-        query,
-        path: ".",
-        regex: false,
-        caseSensitive: false,
-      });
-      setSearchResults(results.map((r: { file: string; line: number; text: string }) => r));
-    } catch {
-      setSearchResults([]);
-    }
-  }, [searchQuery]);
-
-  // ─── Render ───────────────────────────────────────
 
   return (
     <div className="sidebar">
@@ -296,39 +275,10 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
         />
       )}
       {view === "search" && (
-        <div style={{ padding: 8 }}>
-          <input
-            style={{
-              width: "100%", padding: "6px 8px",
-              background: "var(--bg-tertiary)", border: "1px solid var(--border-color)",
-              color: "var(--text-primary)", fontSize: 13, borderRadius: 4, outline: "none",
-            }}
-            placeholder="Search files..."
-            value={searchQuery}
-            onChange={(e) => { setSearchQuery(e.target.value); handleSearch(e.target.value); }}
-          />
-          {searchResults.length > 0 && (
-            <div style={{ marginTop: 8 }}>
-              {searchResults.map((r, i) => (
-                <div key={i} style={{
-                  padding: "4px 8px", fontSize: 12, cursor: "pointer",
-                  color: "var(--text-primary)", borderBottom: "1px solid var(--border-color)",
-                }}
-                  onClick={() => handleOpenFile(r.file)}
-                  title={`Click to open ${r.file}:${r.line}`}
-                >
-                  <div style={{ fontWeight: 600 }}>{r.file.split("/").pop()}:{r.line}</div>
-                  <div style={{ color: "var(--text-secondary)", whiteSpace: "pre", overflow: "hidden", textOverflow: "ellipsis" }}>{r.text}</div>
-                </div>
-              ))}
-            </div>
-          )}
-          {searchQuery && searchResults.length === 0 && (
-            <div style={{ padding: "12px 4px", color: "var(--text-secondary)", fontSize: 12 }}>
-              No results found
-            </div>
-          )}
-        </div>
+        <SearchPanel
+          projectRoot={projectRoot}
+          onOpenFile={handleOpenFile}
+        />
       )}
       {view === "git" && (
         gitLoading ? (

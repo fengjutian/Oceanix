@@ -2405,6 +2405,7 @@ name = "oceanix-git"
 version = "0.1.0"
 dependencies = [
  "git2",
+ "thiserror 2.0.18",
  "tracing",
 ]
 

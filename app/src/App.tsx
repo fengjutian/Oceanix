@@ -11,6 +11,10 @@ import ProblemsPanel from "./components/ProblemsPanel";
 import DebugPanel from "./components/DebugPanel";
 import OutputPanel from "./components/OutputPanel";
 import SettingsPanel from "./components/SettingsPanel";
+import SearchPanel from "./components/SearchPanel";
+import ChatPanel from "./components/ChatPanel";
+import FileExplorer from "./components/FileExplorer";
+import GitPanel from "./components/GitPanel";
 import AgentDialog from "./components/AgentDialog";
 import type { editor } from "monaco-editor";
 import { CommandPalette, type Command } from "@oceanix/command-palette";
@@ -21,8 +25,12 @@ import { applyTheme, DARK_THEME, LIGHT_THEME } from "@oceanix/theme";
 import { loadSession, saveSession, SessionState, getProjectRoot, writeFile, setProjectRoot, openFolderDialog, openFileDialog, readFile, readFileBase64, openNewWindow, initConfiguration, gitBranchName, gitShow, taskRun } from "./services/api";
 import { getConfigurationService } from "./services/configuration";
 import { commands } from "@oceanix/commands";
+import { viewContainers } from "@oceanix/view-container";
 import { useAgentOpener } from "./services/agentOpener";
 import { GlassDialog, GlassBtn } from "@oceanix/glass";
+import { FolderOpen, Search, GitBranch, Bot, Database, Sparkles } from "lucide-react";
+import { NotificationToast } from "./services/notificationService";
+import { lifecycle } from "./services/lifecycleService";
 
 const DEFAULT_BINDINGS: KeyBinding[] = [
   { key: "Ctrl+Shift+P", command: "palette.show", label: "Show Command Palette" },
@@ -442,6 +450,18 @@ function App() {
     applyTheme(theme === "dark" ? DARK_THEME : LIGHT_THEME);
   }, [theme]);
 
+  // ─── ViewContainer Registration (VSCode ViewContainers pattern) ──
+  useEffect(() => {
+    viewContainers.registerMany([
+      { id: "explorer", name: "Explorer", icon: FolderOpen, component: FileExplorer, location: "sidebar", order: 0 },
+      { id: "search", name: "Search", icon: Search, component: SearchPanel, location: "sidebar", order: 1 },
+      { id: "git", name: "Source Control", icon: GitBranch, component: GitPanel, location: "sidebar", order: 2 },
+      { id: "ai", name: "AI Chat", icon: Bot, component: ChatPanel, location: "sidebar", order: 3 },
+      { id: "agent", name: "Agent", icon: Sparkles, component: (() => null) as any, location: "sidebar", order: 4, action: () => agentOpener.open() },
+      { id: "rag", name: "RAG Search", icon: Database, component: (() => null) as any, location: "sidebar", order: 5 },
+    ]);
+  }, []);
+
   // ─── Load settings & git branch ────────────────────
   useEffect(() => {
     initConfiguration().catch(() => {});
@@ -470,6 +490,8 @@ function App() {
     });
     // Load project root from backend
     getProjectRoot().then(setProjectRootState).catch(() => {});
+    // Mark app as ready (VSCode LifecyclePhase pattern)
+    lifecycle.phase = "ready";
   }, []);
 
   useEffect(() => {
@@ -810,6 +832,7 @@ function App() {
           </div>
         </GlassDialog>
       )}
+      <NotificationToast />
     </div>
   );
 }

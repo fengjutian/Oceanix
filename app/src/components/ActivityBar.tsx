@@ -1,5 +1,8 @@
-import { FolderOpen, Search, GitBranch, Bot, Database, Settings, Sparkles } from "lucide-react";
+import { Settings } from "lucide-react";
 import { useLocale } from "../i18n/LocaleContext";
+import { viewContainers } from "@oceanix/view-container";
+import { useState, useEffect } from "react";
+import type { IViewDescriptor } from "@oceanix/view-container";
 
 interface ActivityBarProps {
   activeView: string;
@@ -10,34 +13,41 @@ interface ActivityBarProps {
 
 export default function ActivityBar({ activeView, onViewChange, onOpenSettings, onOpenAgent }: ActivityBarProps) {
   const { t } = useLocale();
-  const icons: Record<string, { icon: React.ReactNode; label: string }> = {
-    explorer: { icon: <FolderOpen size={20} />, label: t("activity.explorer") },
-    search: { icon: <Search size={20} />, label: t("activity.search") },
-    git: { icon: <GitBranch size={20} />, label: t("activity.git") },
-    ai: { icon: <Bot size={20} />, label: t("activity.ai") },
-    agent: { icon: <Sparkles size={20} />, label: t("activity.agent") },
-    rag: { icon: <Database size={20} />, label: t("activity.rag") },
-  };
+  const [sidebarViews, setSidebarViews] = useState<IViewDescriptor[]>(
+    () => viewContainers.getByLocation("sidebar")
+  );
+
+  // Re-render when views are registered
+  useEffect(() => {
+    const unsub = viewContainers.onDidChange(() => {
+      setSidebarViews(viewContainers.getByLocation("sidebar"));
+    });
+    return unsub;
+  }, []);
 
   return (
     <div className="activity-bar">
       <div className="activity-bar-top">
-        {Object.entries(icons).map(([key, { icon, label }]) => (
-          <button
-            key={key}
-            className={`activity-btn ${activeView === key && key !== "agent" ? "active" : ""}`}
-            onClick={() => {
-              if (key === "agent") {
-                onOpenAgent?.();
-              } else {
-                onViewChange(key);
-              }
-            }}
-            title={label}
-          >
-            {icon}
-          </button>
-        ))}
+        {sidebarViews.map((view) => {
+          const Icon = view.icon;
+          const isAction = !!view.action;
+          return (
+            <button
+              key={view.id}
+              className={`activity-btn ${activeView === view.id && !isAction ? "active" : ""}`}
+              onClick={() => {
+                if (isAction) {
+                  view.action?.();
+                } else {
+                  onViewChange(view.id);
+                }
+              }}
+              title={view.name}
+            >
+              <Icon size={20} />
+            </button>
+          );
+        })}
       </div>
       <div className="activity-bar-bottom">
         <button

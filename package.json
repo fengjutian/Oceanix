@@ -20,6 +20,7 @@
     "packages/ai-chat",
     "packages/agent-workspace",
     "packages/glass",
-    "packages/commands"
+    "packages/commands",
+    "packages/view-container"
   ]
 }

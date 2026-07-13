@@ -15,6 +15,7 @@ import {
 import type { RAGResult } from "../services/api";
 import { useLocale } from "../i18n/LocaleContext";
 import { RotateCw } from "lucide-react";
+import { viewContainers } from "@oceanix/view-container";
 
 interface SidebarProps {
   view: string;
@@ -456,6 +457,24 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
           </div>
         </div>
       )}
+      {/* ViewContainer registry fallback — renders any view registered with location="sidebar"
+          that is not one of the built-in views above. */}
+      {!["explorer", "search", "git", "ai", "rag"].includes(view) && (() => {
+        const registered = viewContainers.getById(view);
+        if (registered) {
+          const ViewComponent = registered.component;
+          return <ViewComponent
+            projectRoot={projectRoot}
+            onOpenFile={onOpenFile}
+            onFileSelect={onFileSelect}
+            onFileTreeLoaded={onFileTreeLoaded}
+            selectionContext={selectionContext}
+            editorContext={editorContext}
+            onOpenInAgent={onOpenInAgent}
+          />;
+        }
+        return null;
+      })()}
     </div>
   );
 }

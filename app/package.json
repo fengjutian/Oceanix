@@ -12,6 +12,7 @@
   "dependencies": {
     "@oceanix/agent-workspace": "*",
     "@oceanix/commands": "*",
+    "@oceanix/view-container": "*",
     "@oceanix/command-palette": "*",
     "@oceanix/keybinding": "*",
     "@oceanix/theme": "*",

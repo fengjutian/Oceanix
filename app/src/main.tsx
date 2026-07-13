@@ -2,6 +2,9 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { LocaleProvider } from "./i18n/LocaleContext";
+import { ServiceProvider, ServiceCollection } from "./services/serviceCollection";
+import { IConfigurationService } from "./services/serviceIdentifiers";
+import { getConfigurationService } from "./services/configuration";
 import "./styles/global.css";
 
 // Configure Monaco Editor web workers for Vite local loading
@@ -36,10 +39,16 @@ import "monaco-editor/esm/vs/basic-languages/less/less.contribution";
 
 loader.config({ monaco });
 
+// ─── DI Container (VSCode InstantiationService pattern) ──
+const services = new ServiceCollection();
+services.set(IConfigurationService, getConfigurationService());
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <LocaleProvider>
-      <App />
-    </LocaleProvider>
+    <ServiceProvider services={services}>
+      <LocaleProvider>
+        <App />
+      </LocaleProvider>
+    </ServiceProvider>
   </React.StrictMode>,
 );

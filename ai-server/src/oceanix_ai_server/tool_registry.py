@@ -253,7 +253,15 @@ def wrap_user_tools(user_tools: list[UserToolDef]) -> list:
 
 def get_all_tools(workspace_root: str | None = None) -> list:
     """Return built-in tools + user-defined tools combined."""
-    from .tools import TOOLS as BUILTIN_TOOLS
+    from .tools.builtin import read_file, write_file, grep_files, glob_files
+    from langchain_core.tools import tool as langchain_tool
+
+    BUILTIN_TOOLS = [
+        langchain_tool(read_file),
+        langchain_tool(write_file),
+        langchain_tool(grep_files),
+        langchain_tool(glob_files),
+    ]
 
     user_tools = load_user_tools(workspace_root)
     wrapped_user_tools = wrap_user_tools(user_tools)

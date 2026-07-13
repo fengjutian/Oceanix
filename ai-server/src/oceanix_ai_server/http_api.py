@@ -30,8 +30,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Re-use the same LLM provider from server.py
-from .server import _get_llm as get_llm
+# Re-use the shared LLM service from server.py
+from .server import llm_service
 
 
 class ChatRequest:
@@ -56,10 +56,10 @@ async def chat_stream(request: Request):
     # Read optional model selection from request
     model = body.get("model")
 
-    provider = get_llm(model=model) if model else get_llm()
+    provider = llm_service.to_langchain_model(model_id=model) if model else llm_service.to_langchain_model()
     if not provider:
         async def _error():
-            yield f"data: {json.dumps({'error': 'No LLM provider configured. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'})}\n\n"
+            yield f"data: {json.dumps({'error': 'No LLM provider configured. Set DEEPSEEK_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY.'})}\n\n"
             yield "data: [DONE]\n\n"
         return StreamingResponse(_error(), media_type="text/event-stream")
 
@@ -283,15 +283,28 @@ async def agent_stream(request: Request):
 @app.get("/mcp/tools")
 async def mcp_tools():
     """List all registered MCP tools + user-defined tools with metadata."""
-    from .server import get_mcp_tool_definitions
+    from .server import get_mcp_tool_definitions, tool_service
     from .tool_registry import get_user_tool_defs
 
     builtin = get_mcp_tool_definitions()
     user = get_user_tool_defs()
 
+    # Also include tools from the new ToolService
+    tool_svc_tools = [
+        {
+            "name": t.id,
+            "description": t.description,
+            "category": t.category.value,
+            "requires_confirmation": t.requires_confirmation,
+            "parameters": [{"name": p.name, "type": p.type, "description": p.description} for p in t.parameters],
+        }
+        for t in tool_service.list_all()
+    ]
+
     return {
         "tools": builtin,
         "user_tools": user,
+        "tool_registry": tool_svc_tools,
     }
 
 
@@ -327,15 +340,77 @@ async def mcp_tools_remove(tool_name: str):
     return {"status": "removed", "name": tool_name}
 
 
-# ── Health check ─────────────────────────────────────────
+# ── Health check & model listing ─────────────────────────
 
 @app.get("/health")
 async def health():
-    provider = get_llm()
     return {
         "status": "ok",
-        "provider": type(provider).__name__ if provider else "none",
+        "providers": list(llm_service.providers.keys()),
+        "default_provider": llm_service.default_provider_id,
     }
+
+
+@app.get("/models")
+async def list_models():
+    """List all available LLM models across all providers."""
+    models = llm_service.list_models()
+    return {
+        "models": [
+            {
+                "id": m.id,
+                "display_name": m.display_name,
+                "provider_id": m.provider_id,
+                "max_tokens": m.max_tokens,
+                "supports_streaming": m.supports_streaming,
+                "supports_tools": m.supports_tools,
+                "supports_images": m.supports_images,
+            }
+            for m in models
+        ]
+    }
+
+
+# ── MCP Resources & Prompts (HTTP bridge) ───────────────
+
+@app.get("/mcp/resources")
+async def mcp_resources():
+    """List all MCP resources."""
+    from .routes.mcp_routes import mcp_routes
+    return {"resources": mcp_routes.list_resources()}
+
+
+@app.get("/mcp/resources/read")
+async def mcp_resources_read(uri: str = Query(..., description="Resource URI to read")):
+    """Read an MCP resource by URI."""
+    from .routes.mcp_routes import mcp_routes
+    content = mcp_routes.read_resource(uri)
+    if content.startswith("Resource not found"):
+        raise HTTPException(status_code=404, detail=content)
+    return {"uri": uri, "content": content}
+
+
+@app.get("/mcp/prompts")
+async def mcp_prompts():
+    """List all MCP prompt templates."""
+    from .routes.mcp_routes import mcp_routes
+    return {"prompts": mcp_routes.list_prompts()}
+
+
+@app.post("/mcp/prompts/{prompt_name}")
+async def mcp_prompts_get(prompt_name: str, request: Request):
+    """Get a rendered prompt by name with arguments."""
+    from .routes.mcp_routes import mcp_routes
+    prompt = mcp_routes.get_prompt(prompt_name)
+    if prompt is None:
+        raise HTTPException(status_code=404, detail=f"Prompt '{prompt_name}' not found")
+    body = await request.json()
+    args = body.get("arguments", {})
+    try:
+        rendered = prompt.template.format(**args)
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=f"Missing argument: {e}")
+    return {"name": prompt_name, "rendered": rendered}
 
 
 # ── Entry point for standalone HTTP mode ─────────────────

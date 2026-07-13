@@ -792,6 +792,27 @@ export async function searchInFiles(params: {
 
 const RAG_URL = "http://127.0.0.1:11435";
 
+// ─── Model Discovery ─────────────────────────────────
+
+export interface ModelInfo {
+  id: string;
+  display_name: string;
+  provider_id: string;
+  max_tokens: number;
+  supports_streaming: boolean;
+  supports_tools: boolean;
+  supports_images: boolean;
+}
+
+export async function listModels(): Promise<ModelInfo[]> {
+  const res = await fetch(`${RAG_URL}/models`);
+  if (!res.ok) throw new Error(`Failed to list models: ${res.status}`);
+  const data = await res.json();
+  return data.models ?? [];
+}
+
+// ─── RAG (Retrieval Augmented Generation) ───────────
+
 export interface RAGResult {
   file: string;
   start_line: number;

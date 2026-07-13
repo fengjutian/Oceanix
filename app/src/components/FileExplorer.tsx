@@ -192,8 +192,8 @@ export default function FileExplorer({
           return node;
         };
         const updated = updateNode(prev);
-        // Notify parent of updated flat file list
-        onFileTreeLoaded?.(flattenFiles(updated));
+        // Notify parent of updated flat file list (deferred to avoid setState-during-render)
+        queueMicrotask(() => onFileTreeLoaded?.(flattenFiles(updated)));
         return updated;
       });
     } catch {
@@ -226,7 +226,7 @@ export default function FileExplorer({
     }
 
     if (onOpenFile) {
-      const label = path.split("/").pop() || path;
+      const label = path.split(/[/\\]/).pop() || path;
       const ext = label.split(".").pop()?.toLowerCase() || "";
 
       const IMG_EXTS = new Set(["png", "jpg", "jpeg", "gif", "svg", "ico", "webp", "bmp", "tiff", "avif"]);

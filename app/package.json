@@ -11,8 +11,6 @@
   },
   "dependencies": {
     "@oceanix/agent-workspace": "*",
-    "@oceanix/commands": "*",
-    "@oceanix/view-container": "*",
     "@monaco-editor/react": "^4.6.0",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",

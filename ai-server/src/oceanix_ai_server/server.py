@@ -22,10 +22,7 @@ from oceanix_ai_server.tools import register_builtin_tools
 
 # ── MCP Server (stdio) ────────────────────────────────
 
-mcp = FastMCP(
-    "Oceanix AI",
-    description="Oceanix code editor AI assistant — code completion, chat, and agent",
-)
+mcp = FastMCP("Oceanix AI")
 
 # ── Service initialization ────────────────────────────
 

@@ -1,8 +1,7 @@
 import { Settings } from "lucide-react";
 import { useLocale } from "../i18n/LocaleContext";
-import { viewContainers } from "@oceanix/view-container";
+import { viewContainers, type IViewDescriptor } from "../services/viewContainerRegistry";
 import { useState, useEffect } from "react";
-import type { IViewDescriptor } from "@oceanix/view-container";
 
 interface ActivityBarProps {
   activeView: string;

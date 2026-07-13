@@ -15,7 +15,7 @@ import {
 import type { RAGResult } from "../services/api";
 import { useLocale } from "../i18n/LocaleContext";
 import { RotateCw } from "lucide-react";
-import { viewContainers } from "@oceanix/view-container";
+import { viewContainers } from "../services/viewContainerRegistry";
 
 interface SidebarProps {
   view: string;
@@ -60,7 +60,7 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
     }
 
     if (onOpenFile) {
-      const label = path.split("/").pop() || path;
+      const label = path.split(/[/\\]/).pop() || path;
       const ext = label.split(".").pop()?.toLowerCase() || "";
 
       const IMG_EXTS = new Set(["png", "jpg", "jpeg", "gif", "svg", "ico", "webp", "bmp", "tiff", "avif"]);

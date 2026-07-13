@@ -112,7 +112,7 @@ export default function GitPanel({
             >
               {branches.map((b) => (
                 <option key={b.name} value={b.name}>
-                  <GitBranch size={12} style={{ marginRight: 2 }} /> {b.name}{b.isHead ? " *" : ""}
+                  {b.name}{b.isHead ? " *" : ""}
                 </option>
               ))}
             </select>

@@ -27,7 +27,7 @@ const COLORS = {
 
 const TREE = {
   rowHeight: 22,
-  indentWidth: 16,
+  indentWidth: 10,
   fontSize: 13,
 };
 
@@ -522,7 +522,7 @@ const IndentGuides: React.FC<{ depth: number }> = React.memo(({ depth }) => {
   return (
     <>
       {Array.from({ length: depth }, (_, i) => (
-        <span key={i} style={styles.indentGuide} />
+        <span key={i} style={styles.indentSpacer} />
       ))}
     </>
   );

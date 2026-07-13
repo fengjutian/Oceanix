@@ -23,8 +23,8 @@ import { KeybindingRegistry, KeyBinding } from "@oceanix/keybinding";
 import { applyTheme, DARK_THEME, LIGHT_THEME } from "@oceanix/theme";
 import { loadSession, saveSession, SessionState, getProjectRoot, writeFile, setProjectRoot, openFolderDialog, openFileDialog, readFile, readFileBase64, openNewWindow, initConfiguration, gitBranchName, gitShow, taskRun } from "./services/api";
 import { getConfigurationService } from "./services/configuration";
-import { commands } from "@oceanix/commands";
-import { viewContainers } from "@oceanix/view-container";
+import { commands } from "./services/commandRegistry";
+import { viewContainers } from "./services/viewContainerRegistry";
 import { useAgentOpener } from "./services/agentOpener";
 import { GlassDialog, GlassBtn } from "@oceanix/glass";
 import { FolderOpen, Search, GitBranch, Bot, Database, Sparkles } from "lucide-react";
@@ -126,7 +126,7 @@ function App() {
     if (!fileChoicePath) return;
     const path = fileChoicePath;
     setFileChoicePath(null);
-    const label = path.split("/").pop() || path;
+        const label = path.split(/[/\\]/).pop() || path;
     const ext = label.split(".").pop()?.toLowerCase() || "";
 
     // Image files: read as base64 data URI
@@ -160,7 +160,7 @@ function App() {
     if (!fileChoicePath) return;
     const path = fileChoicePath;
     setFileChoicePath(null);
-    const label = path.split("/").pop() || path;
+    const label = path.split(/[/\\]/).pop() || path;
     const ext = label.split(".").pop()?.toLowerCase() || "";
 
     // Image files: read as base64 data URI
@@ -496,7 +496,7 @@ function App() {
         const restoredTabs: EditorTab[] = session.openFiles.map((path, i) => ({
           id: `restored-${i}`,
           path,
-          label: path.split("/").pop() || path,
+          label: path.split(/[/\\]/).pop() || path,
           language: "plaintext",
           content: "",
           dirty: false,

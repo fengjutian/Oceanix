@@ -12,7 +12,7 @@
  *   executeCommand("panel.toggle");
  */
 
-import { commands as globalCommands } from "@oceanix/commands";
+import { commands as globalCommands } from "./commandRegistry";
 
 type CommandFn = (...args: unknown[]) => void;
 

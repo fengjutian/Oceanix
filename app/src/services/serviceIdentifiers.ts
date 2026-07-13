@@ -6,8 +6,8 @@
  */
 
 import { createServiceIdentifier } from "./serviceCollection";
-import type { CommandRegistry } from "@oceanix/commands";
-import type { ViewContainerRegistry } from "@oceanix/view-container";
+import type { CommandRegistry } from "./commandRegistry";
+import type { ViewContainerRegistry } from "./viewContainerRegistry";
 import type { IConfigurationService } from "./configuration";
 
 // ─── Existing services that can be registered ──────────

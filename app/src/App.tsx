@@ -654,6 +654,18 @@ function App() {
                     activeLanguage: activeTab?.language,
                   }}
                   onOpenInAgent={(path) => agentOpener.open(`Analyze: ${path}`)}
+                  onApplyToFile={(code, targetFile) => {
+                    // Apply code to a file: open it and replace content
+                    const existing = tabs.find((t) => t.path === targetFile);
+                    if (existing) {
+                      updateContent(existing.id, code);
+                    } else {
+                      openTab(targetFile, code);
+                    }
+                  }}
+                  onInsertAtCursor={(code) => {
+                    editorHandleRef.current?.insertAtCursor(code);
+                  }}
                 />
               </Panel>
               <PanelResizeHandle className="resize-handle" />
@@ -784,7 +796,7 @@ function App() {
       {showSettings && (
         <GlassDialog open={showSettings} onClose={() => setShowSettings(false)} dialogClassName={undefined}>
           <div style={{
-            width: 480, maxHeight: "80vh", overflow: "auto",
+            width: 640, height: 600, overflow: "auto",
           }}>
             <SettingsPanel onClose={() => setShowSettings(false)} />
           </div>

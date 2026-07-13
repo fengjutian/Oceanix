@@ -81,6 +81,8 @@ export interface EditorTabsHandle {
   openGitDiff: (original?: string) => void;
   toggleBlame: () => void;
   toggleBreakpoint: () => void;
+  insertAtCursor: (text: string) => void;
+  replaceContent: (text: string) => void;
 }
 
 interface EditorTabsProps {
@@ -399,7 +401,30 @@ const EditorTabs = forwardRef((
     openGitDiff,
     toggleBlame,
     toggleBreakpoint,
-  }), [toggleMarkdownPreview, openGitDiff, toggleBlame, toggleBreakpoint]);
+    insertAtCursor: (text: string) => {
+      const editor = editorRef?.current;
+      if (!editor) return;
+      const selection = editor.getSelection();
+      if (selection) {
+        editor.executeEdits("insert-at-cursor", [{ range: selection, text }]);
+      } else {
+        const model = editor.getModel();
+        if (model) {
+          const pos = model.getPositionAt(model.getValueLength());
+          editor.executeEdits("insert-at-cursor", [{ range: { startLineNumber: pos.lineNumber, startColumn: pos.column, endLineNumber: pos.lineNumber, endColumn: pos.column }, text }]);
+        }
+      }
+      editor.focus();
+    },
+    replaceContent: (text: string) => {
+      const editor = editorRef?.current;
+      if (!editor) return;
+      const model = editor.getModel();
+      if (!model) return;
+      const fullRange = model.getFullModelRange();
+      editor.executeEdits("replace-content", [{ range: fullRange, text }]);
+    },
+  }), [toggleMarkdownPreview, openGitDiff, toggleBlame, toggleBreakpoint, editorRef]);
 
   // ─── LSP lifecycle ──────────────────────────────────
   const lspVersionRef = useRef(1);

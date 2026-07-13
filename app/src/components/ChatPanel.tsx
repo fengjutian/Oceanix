@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
 import { useLocale } from "../i18n/LocaleContext";
 import { GlassCard, GlassInput, GlassBtn } from "@oceanix/glass";
 import {
@@ -9,13 +9,19 @@ import {
   type ConvMeta,
 } from "../services/api";
 import { getConfigurationService } from "../services/configuration";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 const AI_SERVER_URL = "http://127.0.0.1:11435";
 
 interface ChatMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "agent";
   content: string;
+  agentType?: "plan" | "tool_call" | "tool_result" | "result" | "error";
+  agentMeta?: Record<string, unknown>;
 }
 
 let _msgId = 0;
@@ -43,6 +49,171 @@ const SLASH_COMMANDS: Record<string, string> = {
   "/codebase": "Search the codebase for relevant code. Provide context about the project.\n\n",
 };
 
+// ── CodeBlock with syntax highlighting, copy, apply, insert ──
+
+function CodeBlock({
+  language,
+  code,
+  activeFile,
+  onApplyToFile,
+  onInsertAtCursor,
+}: {
+  language: string;
+  code: string;
+  activeFile?: string;
+  onApplyToFile?: (code: string, targetFile: string) => void;
+  onInsertAtCursor?: (code: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [applied, setApplied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    await navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, [code]);
+
+  const handleApply = useCallback(() => {
+    if (onApplyToFile && activeFile) {
+      onApplyToFile(code, activeFile);
+      setApplied(true);
+      setTimeout(() => setApplied(false), 2000);
+    }
+  }, [code, activeFile, onApplyToFile]);
+
+  const handleInsert = useCallback(() => {
+    onInsertAtCursor?.(code);
+  }, [code, onInsertAtCursor]);
+
+  return (
+    <div style={{ position: "relative", margin: "8px 0", borderRadius: 6, overflow: "hidden", border: "1px solid var(--border-color, #3e3e42)" }}>
+      {/* Header bar */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "3px 8px", background: "var(--bg-tertiary, #2d2d30)",
+        borderBottom: "1px solid var(--border-color, #3e3e42)",
+        fontSize: 11, color: "var(--text-secondary, #999)",
+      }}>
+        <span style={{ fontFamily: "var(--font-mono, 'Cascadia Code', Consolas, monospace)", fontSize: 11 }}>
+          {language}
+        </span>
+        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          {onInsertAtCursor && (
+            <GlassBtn onClick={handleInsert} style={{ fontSize: 10, padding: "1px 6px" }} title="Insert at cursor">
+              ↩ Insert
+            </GlassBtn>
+          )}
+          {onApplyToFile && activeFile && (
+            <GlassBtn onClick={handleApply} style={{ fontSize: 10, padding: "1px 6px" }} title={`Apply to ${activeFile}`}>
+              {applied ? "✓ Applied" : "📄 Apply"}
+            </GlassBtn>
+          )}
+          <GlassBtn onClick={handleCopy} style={{ fontSize: 10, padding: "1px 6px" }} title="Copy code">
+            {copied ? "✓ Copied" : "📋 Copy"}
+          </GlassBtn>
+        </div>
+      </div>
+      {/* Code */}
+      <SyntaxHighlighter
+        language={language}
+        style={oneDark}
+        customStyle={{
+          margin: 0,
+          borderRadius: 0,
+          padding: "10px 12px",
+          fontSize: 12,
+          fontFamily: "var(--font-mono, 'Cascadia Code', Consolas, monospace)",
+          background: "var(--bg-primary, #1e1e1e)",
+        }}
+        codeTagProps={{ style: { fontFamily: "inherit" } }}
+      >
+        {code}
+      </SyntaxHighlighter>
+    </div>
+  );
+}
+
+// ── AgentEventCard — renders agent plan/tool_call/tool_result/result/error ──
+
+function AgentEventCard({ msg }: { msg: ChatMessage }) {
+  const [expanded, setExpanded] = useState(false);
+  const { agentType, agentMeta } = msg;
+
+  switch (agentType) {
+    case "plan": {
+      const steps = (agentMeta?.steps as string[]) ?? [];
+      return (
+        <div style={{ marginBottom: 8, padding: "6px 10px", borderRadius: 6, background: "var(--bg-tertiary, #2d2d30)", border: "1px solid var(--border-color, #3e3e42)", fontSize: 12 }}>
+          <div style={{ fontWeight: 600, color: "var(--accent, #4fc1ff)", marginBottom: 4 }}>📋 Plan</div>
+          <ol style={{ margin: 0, paddingLeft: 18, color: "var(--text-secondary, #999)" }}>
+            {steps.map((s, i) => <li key={i} style={{ marginBottom: 2 }}>{s}</li>)}
+          </ol>
+        </div>
+      );
+    }
+    case "tool_call": {
+      const tool = (agentMeta?.tool as string) ?? "unknown";
+      const input = (agentMeta?.input as string) ?? "";
+      return (
+        <div style={{ marginBottom: 8, padding: "6px 10px", borderRadius: 6, background: "var(--bg-tertiary, #2d2d30)", border: "1px solid var(--border-color, #3e3e42)", fontSize: 12, cursor: "pointer" }} onClick={() => setExpanded(!expanded)}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ color: "var(--text-secondary)" }}>{expanded ? "▼" : "▶"}</span>
+            <span style={{ fontWeight: 600, color: "#dcdcaa" }}>🔧 {tool}</span>
+            <span style={{ color: "var(--text-secondary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{input.slice(0, 80)}</span>
+          </div>
+          {expanded && (
+            <pre style={{ margin: "6px 0 0", padding: 6, background: "var(--bg-primary, #1e1e1e)", borderRadius: 4, fontSize: 11, fontFamily: "var(--font-mono, monospace)", color: "var(--text-primary)", whiteSpace: "pre-wrap", wordBreak: "break-all", maxHeight: 160, overflow: "auto" }}>
+              {input}
+            </pre>
+          )}
+        </div>
+      );
+    }
+    case "tool_result": {
+      const output = (agentMeta?.output as string) ?? "";
+      return (
+        <div style={{ marginBottom: 8, padding: "6px 10px", borderRadius: 6, background: "var(--bg-tertiary, #2d2d30)", border: "1px solid var(--border-color, #3e3e42)", fontSize: 12, cursor: "pointer" }} onClick={() => setExpanded(!expanded)}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ color: "var(--text-secondary)" }}>{expanded ? "▼" : "▶"}</span>
+            <span style={{ color: "#6a9955" }}>📤 Result</span>
+            <span style={{ color: "var(--text-secondary)", fontSize: 11 }}>{output.length} chars</span>
+          </div>
+          {expanded && (
+            <pre style={{ margin: "6px 0 0", padding: 6, background: "var(--bg-primary, #1e1e1e)", borderRadius: 4, fontSize: 11, fontFamily: "var(--font-mono, monospace)", color: "var(--text-primary)", whiteSpace: "pre-wrap", wordBreak: "break-all", maxHeight: 240, overflow: "auto" }}>
+              {output}
+            </pre>
+          )}
+        </div>
+      );
+    }
+    case "result": {
+      const stepsCompleted = agentMeta?.steps_completed as number | undefined;
+      const files = agentMeta?.files as number | undefined;
+      return (
+        <div style={{ marginBottom: 8, padding: "6px 10px", borderRadius: 6, background: "rgba(106, 153, 85, 0.1)", border: "1px solid #6a9955", fontSize: 12 }}>
+          <div style={{ fontWeight: 600, color: "#6a9955", marginBottom: 2 }}>✅ Completed</div>
+          {stepsCompleted !== undefined && <div style={{ color: "var(--text-secondary)" }}>{stepsCompleted} steps</div>}
+          {files !== undefined && <div style={{ color: "var(--text-secondary)" }}>{files} files changed</div>}
+          {msg.content && (
+            <div style={{ marginTop: 4, color: "var(--text-primary)", whiteSpace: "pre-wrap" }}>{msg.content}</div>
+          )}
+        </div>
+      );
+    }
+    case "error": {
+      const message = (agentMeta?.message as string) ?? "Unknown error";
+      return (
+        <div style={{ marginBottom: 8, padding: "6px 10px", borderRadius: 6, background: "rgba(244, 71, 71, 0.1)", border: "1px solid #f44747", fontSize: 12 }}>
+          <span style={{ fontWeight: 600, color: "#f44747" }}>❌ Error: </span>
+          <span style={{ color: "var(--text-primary)" }}>{message}</span>
+        </div>
+      );
+    }
+    default:
+      return null;
+  }
+}
+
 /**
  * ChatPanel — AI chat interface with real SSE streaming,
  * conversation history, and slash commands.
@@ -50,9 +221,13 @@ const SLASH_COMMANDS: Record<string, string> = {
 export default function ChatPanel({
   selectionContext,
   editorContext,
+  onApplyToFile,
+  onInsertAtCursor,
 }: {
   selectionContext?: { code: string; file: string; language: string } | null;
   editorContext?: { openFiles: string[]; activeFile: string } | null;
+  onApplyToFile?: (code: string, targetFile: string) => void;
+  onInsertAtCursor?: (code: string) => void;
 }) {
   const { t } = useLocale();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -65,9 +240,15 @@ export default function ChatPanel({
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [slashMatch, setSlashMatch] = useState<string | null>(null);
   const [aiModel, setAiModel] = useState<string>("deepseek-v4-pro");
+  const [agentMode, setAgentMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Stop generation ──────────────────────────────
+  const handleStop = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
 
   // ── Load conversation list and settings on mount ──
   useEffect(() => {
@@ -102,7 +283,7 @@ export default function ChatPanel({
       saveTimerRef.current = setTimeout(() => {
         saveConversation(
           convId,
-          messages.map((m) => ({ role: m.role, content: m.content }))
+          messages.filter(m => m.role !== "agent").map((m) => ({ role: m.role === "agent" ? "assistant" : m.role, content: m.content }))
         )
           .then(() => refreshConvList())
           .catch(() => setError(t("chat.saveError")));
@@ -223,35 +404,20 @@ export default function ChatPanel({
     }
   }, [convId, newChat, t]);
 
-  // ── Send message ───────────────────────────────────
-  const sendMessage = useCallback(async () => {
-    const text = input.trim();
-    if (!text || streaming) return;
-
-    setInput("");
-    setError(null);
-
-    // Assign a conversation ID if this is the first message
-    const cid = convId ?? makeConvId();
-    if (!convId) setConvId(cid);
-
-    const userMsg: ChatMessage = { id: nextId(), role: "user", content: text };
+  // ── Send chat-mode message ─────────────────────────
+  const sendChatMessage = useCallback(async (
+    text: string, cid: string, controller: AbortController, userMsg: ChatMessage
+  ) => {
     const aiId = nextId();
     const aiMsg: ChatMessage = { id: aiId, role: "assistant", content: "" };
-
-    setMessages((prev) => [...prev, userMsg, aiMsg]);
-    setStreaming(true);
-
-    const controller = new AbortController();
-    abortRef.current = controller;
+    setMessages((prev) => [...prev, aiMsg]);
 
     try {
       const allMessages = [...messages, userMsg].map((m) => ({
-        role: m.role,
+        role: m.role === "agent" ? "assistant" : m.role,
         content: m.content,
       }));
 
-      // Build context: current open files
       const contextFiles = editorContext?.openFiles?.length
         ? editorContext.openFiles
         : undefined;
@@ -263,9 +429,7 @@ export default function ChatPanel({
         signal: controller.signal,
       });
 
-      if (!res.ok) {
-        throw new Error(`Server error: ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
       const reader = res.body?.getReader();
       if (!reader) throw new Error("No response body");
@@ -276,36 +440,24 @@ export default function ChatPanel({
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
-
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed.startsWith("data: ")) continue;
           const data = trimmed.slice(6);
-
           if (data === "[DONE]") continue;
-
           try {
             const json = JSON.parse(data);
             const delta = json?.choices?.[0]?.delta?.content;
             if (delta) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === aiId
-                    ? { ...m, content: m.content + delta }
-                    : m
-                )
-              );
+              setMessages((prev) => prev.map((m) =>
+                m.id === aiId ? { ...m, content: m.content + delta } : m
+              ));
             }
-            if (json?.error) {
-              setError(json.error);
-            }
-          } catch {
-            // skip unparseable lines
-          }
+            if (json?.error) setError(json.error);
+          } catch { /* skip */ }
         }
       }
     } catch (err: unknown) {
@@ -315,7 +467,137 @@ export default function ChatPanel({
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, messages, streaming, convId, editorContext]);
+  }, [messages, editorContext, aiModel]);
+
+  // ── Send agent-mode message ────────────────────────
+  const sendAgentMessage = useCallback(async (
+    text: string, cid: string, controller: AbortController, _userMsg: ChatMessage
+  ) => {
+    try {
+      const contextFiles = editorContext?.openFiles?.length
+        ? editorContext.openFiles
+        : undefined;
+
+      const res = await fetch(`${AI_SERVER_URL}/agent/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task: text, context_files: contextFiles, model: aiModel }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) throw new Error(`Agent server error: ${res.status}`);
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
+          const data = trimmed.slice(6);
+          if (data === "[DONE]") continue;
+          try {
+            const event = JSON.parse(data);
+            handleAgentEvent(event);
+          } catch { /* skip */ }
+        }
+      }
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setError(err instanceof Error ? err.message : "Agent connection failed");
+    } finally {
+      setStreaming(false);
+      abortRef.current = null;
+    }
+  }, [editorContext, aiModel]);
+
+  // ── Handle agent streaming events ──────────────────
+  const handleAgentEvent = useCallback((event: { type: string; [key: string]: unknown }) => {
+    switch (event.type) {
+      case "plan": {
+        const steps = event.steps as string[] | undefined;
+        setMessages((prev) => [...prev, {
+          id: nextId(), role: "agent", content: "",
+          agentType: "plan",
+          agentMeta: { steps: steps ?? [] },
+        }]);
+        break;
+      }
+      case "tool_call": {
+        setMessages((prev) => [...prev, {
+          id: nextId(), role: "agent", content: "",
+          agentType: "tool_call",
+          agentMeta: { tool: event.tool as string, input: event.input as string },
+        }]);
+        break;
+      }
+      case "tool_result": {
+        setMessages((prev) => [...prev, {
+          id: nextId(), role: "agent", content: "",
+          agentType: "tool_result",
+          agentMeta: { output: (event.output as string)?.slice(0, 2000) ?? "" },
+        }]);
+        break;
+      }
+      case "result": {
+        setMessages((prev) => [...prev, {
+          id: nextId(), role: "agent", content: (event.summary as string) ?? "",
+          agentType: "result",
+          agentMeta: { steps_completed: event.steps_completed as number },
+        }]);
+        break;
+      }
+      case "error": {
+        setMessages((prev) => [...prev, {
+          id: nextId(), role: "agent", content: "",
+          agentType: "error",
+          agentMeta: { message: event.message as string },
+        }]);
+        break;
+      }
+      case "file_changes": {
+        setMessages((prev) => [...prev, {
+          id: nextId(), role: "agent", content: "",
+          agentType: "result",
+          agentMeta: { files: event.files as number, insertions: event.insertions as number, deletions: event.deletions as number },
+        }]);
+        break;
+      }
+    }
+  }, []);
+
+  // ── Send message (chat or agent mode) ──────────────
+  const sendMessage = useCallback(async () => {
+    const text = input.trim();
+    if (!text || streaming) return;
+
+    setInput("");
+    setError(null);
+
+    const cid = convId ?? makeConvId();
+    if (!convId) setConvId(cid);
+
+    const userMsg: ChatMessage = { id: nextId(), role: "user", content: text };
+    setMessages((prev) => [...prev, userMsg]);
+    setStreaming(true);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    if (agentMode) {
+      await sendAgentMessage(text, cid, controller, userMsg);
+    } else {
+      await sendChatMessage(text, cid, controller, userMsg);
+    }
+  }, [input, messages, streaming, convId, editorContext, agentMode, aiModel, sendChatMessage, sendAgentMessage]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -462,6 +744,19 @@ export default function ChatPanel({
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <GlassBtn
+              onClick={() => setAgentMode((v) => !v)}
+              style={{
+                fontSize: 10,
+                padding: "1px 8px",
+                background: agentMode ? "var(--accent, #4fc1ff)" : "transparent",
+                color: agentMode ? "#000" : "var(--text-secondary)",
+                border: agentMode ? "none" : "1px solid var(--border-color)",
+              }}
+              title={agentMode ? "Switch to Chat mode" : "Switch to Agent mode"}
+            >
+              {agentMode ? "⚡ Agent" : "💬 Chat"}
+            </GlassBtn>
             {convId && (
               <span
                 onClick={newChat}
@@ -472,7 +767,12 @@ export default function ChatPanel({
               </span>
             )}
             {streaming && (
-              <span style={{ fontSize: 10, color: "var(--accent)" }}>● {t("sidebar.aiStreaming")}</span>
+              <GlassBtn
+                onClick={handleStop}
+                style={{ fontSize: 10, padding: "2px 8px", background: "var(--text-error, #f44747)", color: "#fff", border: "none" }}
+              >
+                ■ Stop{agentMode ? " Agent" : ""}
+              </GlassBtn>
             )}
           </div>
         </div>
@@ -498,7 +798,13 @@ export default function ChatPanel({
               {t("chat.empty")}
             </div>
           )}
-          {messages.map((msg) => (
+          {messages.map((msg) => {
+            // Agent event messages get special rendering
+            if (msg.role === "agent") {
+              return <AgentEventCard key={msg.id} msg={msg} />;
+            }
+            // Normal user/assistant messages
+            return (
             <GlassCard
               key={msg.id}
               style={{
@@ -517,26 +823,81 @@ export default function ChatPanel({
                       ? "var(--accent)"
                       : "var(--text-secondary)",
                   marginBottom: 4,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                 }}
               >
-                {msg.role === "user" ? t("chat.you") : t("chat.ai")}
+                <span>{msg.role === "user" ? t("chat.you") : t("chat.ai")}</span>
+                {msg.role === "assistant" && msg.content && !streaming && (
+                  <GlassBtn
+                    onClick={() => navigator.clipboard.writeText(msg.content)}
+                    style={{ fontSize: 10, padding: "1px 6px", opacity: 0.6 }}
+                    title="Copy message"
+                  >
+                    📋 Copy
+                  </GlassBtn>
+                )}
               </div>
               <div
                 style={{
                   fontSize: 13,
                   lineHeight: 1.5,
                   color: "var(--text-primary)",
-                  whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
                 }}
+                className="chat-markdown"
               >
-                {msg.content}
-                {streaming && msg.role === "assistant" && msg.content === "" && (
+                {msg.content ? (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      code({ className, children, ...props }) {
+                        const match = /language-(\w+)/.exec(className || "");
+                        const codeString = String(children).replace(/\n$/, "");
+                        const inline = !match && !codeString.includes("\n");
+                        if (inline) {
+                          return (
+                            <code
+                              className={className}
+                              style={{
+                                background: "var(--bg-tertiary, #2d2d30)",
+                                padding: "1px 4px",
+                                borderRadius: 3,
+                                fontSize: 12,
+                                fontFamily: "var(--font-mono, 'Cascadia Code', Consolas, monospace)",
+                              }}
+                              {...props}
+                            >
+                              {children}
+                            </code>
+                          );
+                        }
+                        const language = match ? match[1] : "text";
+                        return (
+                          <CodeBlock
+                            language={language}
+                            code={codeString}
+                            activeFile={editorContext?.activeFile}
+                            onApplyToFile={onApplyToFile}
+                            onInsertAtCursor={onInsertAtCursor}
+                          />
+                        );
+                      },
+                      pre({ children }) {
+                        return <>{children}</>;
+                      },
+                    }}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
+                ) : streaming && msg.role === "assistant" ? (
                   <span style={{ color: "var(--text-secondary)" }}>▊</span>
-                )}
+                ) : null}
               </div>
             </GlassCard>
-          ))}
+            );
+          })}
           {error && (
             <div
               style={{

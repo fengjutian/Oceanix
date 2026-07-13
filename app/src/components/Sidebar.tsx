@@ -31,9 +31,13 @@ interface SidebarProps {
   editorContext?: { openFiles: string[]; activeFile: string; activeLanguage?: string } | null;
   /** Called when user chooses "Open in Agent" from context menu */
   onOpenInAgent?: (path: string) => void;
+  /** Called when user clicks "Apply" on an AI-generated code block */
+  onApplyToFile?: (code: string, targetFile: string) => void;
+  /** Called when user clicks "Insert at cursor" on an AI-generated code block */
+  onInsertAtCursor?: (code: string) => void;
 }
 
-export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, onFileTreeLoaded, selectionContext, editorContext, onOpenInAgent }: SidebarProps) {
+export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, onFileTreeLoaded, selectionContext, editorContext, onOpenInAgent, onApplyToFile, onInsertAtCursor }: SidebarProps) {
   const { t } = useLocale();
 
   // Git state
@@ -330,7 +334,7 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
           />
         )
       )}
-      {view === "ai" && <ChatPanel selectionContext={selectionContext} editorContext={editorContext} />}
+      {view === "ai" && <ChatPanel selectionContext={selectionContext} editorContext={editorContext} onApplyToFile={onApplyToFile} onInsertAtCursor={onInsertAtCursor} />}
       {view === "rag" && (
         <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
           <div style={{

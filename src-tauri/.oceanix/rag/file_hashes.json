@@ -1,0 +1,13 @@
+{
+  "build.rs": "e1a3a79c061b3a1117dfd34c43e03005",
+  "Cargo.toml": "2cefcc1a07ac67c47e82185cc859fda2",
+  "tauri.conf.json": "5f63bf46372c1ff08c8ce1c17bae6324",
+  "capabilities/default.json": "bb7a5f3aee23aaedd8d3e7a5f9ec785a",
+  "gen/schemas/acl-manifests.json": "f0fb80d911e4c8e06c4b47451e1c3ecd",
+  "gen/schemas/windows-schema.json": "d0c3a15f93237499d18efc9c1ba57dee",
+  "gen/schemas/capabilities.json": "f28eb6c6096fec0bd25c61c750621142",
+  "gen/schemas/desktop-schema.json": "d0c3a15f93237499d18efc9c1ba57dee",
+  "src/commands.rs": "76accc1ad40e7ba2d766c35f946b8280",
+  "src/main.rs": "09c58b778b2f144fa4ba4b5dd2724576",
+  "src/lib.rs": "b512895e97b4a03d0c166e5b72d11de6"
+}

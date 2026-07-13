@@ -771,6 +771,7 @@ export async function searchInFiles(params: {
   exclude?: string;
   regex?: boolean;
   caseSensitive?: boolean;
+  wholeWord?: boolean;
 }): Promise<Array<{ file: string; line: number; column: number; text: string }>> {
   return invoke("search_files", { params });
 }

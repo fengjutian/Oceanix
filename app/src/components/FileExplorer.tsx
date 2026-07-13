@@ -2,6 +2,7 @@ import { FileTree, FileNode } from "@oceanix/file-tree";
 import { EditorTab } from "./EditorTabs";
 import OutlinePanel from "./OutlinePanel";
 import { useState, useCallback, useEffect, useRef } from "react";
+import { FilePlus, FolderPlus, Pencil, Sparkles, Trash2 } from "lucide-react";
 import {
   readDir, readFile, readFileBase64,
   createFile, createDir, deleteFile, renameFile,
@@ -110,6 +111,7 @@ export default function FileExplorer({
   const ctxItemStyle: React.CSSProperties = {
     padding: "4px 12px", cursor: "pointer",
     color: "var(--text-primary)",
+    display: "flex", alignItems: "center", gap: 8,
   };
   const ctxSepStyle: React.CSSProperties = {
     height: 1, background: "var(--border-color)", margin: "4px 0",
@@ -356,24 +358,24 @@ export default function FileExplorer({
                 <div style={ctxItemStyle} onClick={() => {
                   ctxMenuRef.current = ctxMenu.node;
                   setCtxShowNewFile(true); setCtxMenu(null);
-                }}>📄 New File</div>
+                }}><FilePlus size={14} /> New File</div>
                 <div style={ctxItemStyle} onClick={() => {
                   ctxMenuRef.current = ctxMenu.node;
                   setCtxShowNewFolder(true); setCtxMenu(null);
-                }}>📁 New Folder</div>
+                }}><FolderPlus size={14} /> New Folder</div>
                 <div style={ctxSepStyle} />
               </>
             )}
             <div style={ctxItemStyle} onClick={() => {
               ctxMenuRef.current = ctxMenu.node;
               setCtxNewName(ctxMenu.node.name); setCtxShowRename(true); setCtxMenu(null);
-            }}>✏️ Rename</div>
+            }}><Pencil size={14} /> Rename</div>
             {ctxMenu.node.type === "file" && (
               <div style={ctxItemStyle} onClick={() => {
                 const n = ctxMenu.node;
                 setCtxMenu(null);
                 onOpenInAgent?.(n.path);
-              }}>🤖 Open in Agent</div>
+              }}><Sparkles size={14} /> Open in Agent</div>
             )}
             <div style={{ ...ctxItemStyle, color: "#f44747" }} onClick={async () => {
               const n = ctxMenu.node;
@@ -381,7 +383,7 @@ export default function FileExplorer({
               if (window.confirm(`Delete "${n.name}"?`)) {
                 try { await deleteFile(n.path); refreshTree(); } catch { /* ignore */ }
               }
-            }}>🗑️ Delete</div>
+            }}><Trash2 size={14} /> Delete</div>
           </div>
         </>
       )}

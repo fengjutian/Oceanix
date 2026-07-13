@@ -14,6 +14,7 @@ import {
 } from "../services/api";
 import type { RAGResult } from "../services/api";
 import { useLocale } from "../i18n/LocaleContext";
+import { RotateCw } from "lucide-react";
 
 interface SidebarProps {
   view: string;
@@ -408,7 +409,7 @@ export default function Sidebar({ view, onOpenFile, onFileSelect, projectRoot, o
                 cursor: "pointer", fontSize: 14, padding: "0 4px", lineHeight: 1,
               }}
             >
-              ↻
+              <RotateCw size={14} />
             </button>
           </div>
 

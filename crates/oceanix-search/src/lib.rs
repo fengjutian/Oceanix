@@ -16,6 +16,7 @@ pub struct SearchParams {
     pub include: Option<String>,
     pub exclude: Option<String>,
     pub case_sensitive: bool,
+    pub whole_word: bool,
     pub max_results: usize,
 }
 
@@ -148,7 +149,12 @@ impl SearchEngine {
     // -- private helpers ----------------------------------------------------
 
     fn build_regex(params: &SearchParams) -> Result<Regex, regex::Error> {
-        RegexBuilder::new(&params.query)
+        let pattern = if params.whole_word {
+            format!(r"\b{}\b", params.query)
+        } else {
+            params.query.clone()
+        };
+        RegexBuilder::new(&pattern)
             .case_insensitive(!params.case_sensitive)
             .build()
     }
@@ -214,6 +220,7 @@ mod tests {
             include: None,
             exclude: None,
             case_sensitive: false,
+            whole_word: false,
             max_results: 10,
         };
 
@@ -232,6 +239,7 @@ mod tests {
             include: None,
             exclude: None,
             case_sensitive: true,
+            whole_word: false,
             max_results: 10,
         };
 
@@ -251,6 +259,7 @@ mod tests {
             include: Some("*.txt".into()),
             exclude: None,
             case_sensitive: false,
+            whole_word: false,
             max_results: 10,
         };
 
@@ -269,6 +278,7 @@ mod tests {
             include: None,
             exclude: None,
             case_sensitive: false,
+            whole_word: false,
             max_results: 1,
         };
 
@@ -284,8 +294,29 @@ mod tests {
             include: None,
             exclude: None,
             case_sensitive: false,
+            whole_word: false,
             max_results: 10,
         };
         assert!(engine.search(&params).is_empty());
+    }
+
+    #[test]
+    fn whole_word_matching() {
+        let tmp = tempfile::tempdir().unwrap();
+        setup_dir(tmp.path());
+
+        let engine = SearchEngine::new(tmp.path().to_str().unwrap());
+        let params = SearchParams {
+            query: "bar".into(),
+            include: None,
+            exclude: None,
+            case_sensitive: false,
+            whole_word: true,
+            max_results: 10,
+        };
+
+        let results = engine.search(&params);
+        assert_eq!(results.len(), 1); // "foo bar" matches, "hello again" does not
+        assert!(results[0].line_text.contains("foo bar"));
     }
 }

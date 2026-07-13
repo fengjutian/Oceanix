@@ -1,33 +1,34 @@
 import { useState, useEffect } from "react";
+import { File, Package, Tag, Wrench, Zap, Pin, Plug, ClipboardList, Link, FileText, Variable, Lock, Hash, CheckSquare, Braces, Key, Box, Calendar, Settings2, Type } from "lucide-react";
 import { lspDocumentSymbol, type LspSymbol } from "../services/api";
 
-const SYMBOL_ICONS: Record<number, string> = {
-  1: "📄",  // File
-  2: "📦",  // Module
-  3: "📦",  // Namespace
-  4: "📦",  // Package
-  5: "🏷️",  // Class
-  6: "🔧",  // Method
-  7: "⚡",  // Property
-  8: "📌",  // Field
-  9: "🔌",  // Constructor
-  10: "📋", // Enum
-  11: "🔗", // Interface
-  12: "📝", // Function
-  13: "📌", // Variable
-  14: "🔒", // Constant
-  15: "📝", // String
-  16: "🔢", // Number
-  17: "✅", // Boolean
-  18: "📋", // Array
-  19: "{}",  // Object
-  20: "🔑", // Key
-  21: "🔐", // Null
-  22: "📋", // EnumMember
-  23: "🏗️", // Struct
-  24: "🎪", // Event
-  25: "⚙️", // Operator
-  26: "🔤", // TypeParameter
+const SYMBOL_ICONS: Record<number, React.ReactNode> = {
+  1: <File size={11} />,       // File
+  2: <Package size={11} />,    // Module
+  3: <Package size={11} />,    // Namespace
+  4: <Package size={11} />,    // Package
+  5: <Tag size={11} />,        // Class
+  6: <Wrench size={11} />,     // Method
+  7: <Zap size={11} />,        // Property
+  8: <Pin size={11} />,        // Field
+  9: <Plug size={11} />,       // Constructor
+  10: <ClipboardList size={11} />, // Enum
+  11: <Link size={11} />,      // Interface
+  12: <FileText size={11} />,  // Function
+  13: <Variable size={11} />,  // Variable
+  14: <Lock size={11} />,      // Constant
+  15: <FileText size={11} />,  // String
+  16: <Hash size={11} />,      // Number
+  17: <CheckSquare size={11} />, // Boolean
+  18: <Braces size={11} />,    // Array
+  19: <Braces size={11} />,    // Object
+  20: <Key size={11} />,       // Key
+  21: <Lock size={11} />,      // Null
+  22: <ClipboardList size={11} />, // EnumMember
+  23: <Box size={11} />,       // Struct
+  24: <Calendar size={11} />,  // Event
+  25: <Settings2 size={11} />, // Operator
+  26: <Type size={11} />,      // TypeParameter
 };
 
 interface OutlinePanelProps {
@@ -50,8 +51,8 @@ function SymbolRow({ sym, depth, onGoToSymbol }: { sym: LspSymbol; depth: number
         onClick={() => onGoToSymbol?.(sym.line)}
         title={`${sym.name} (line ${sym.line + 1})`}
       >
-        <span style={{ fontSize: 10, width: 16, textAlign: "center", flexShrink: 0 }}>
-          {SYMBOL_ICONS[sym.kind] || "📝"}
+        <span style={{ fontSize: 10, width: 16, textAlign: "center", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+          {SYMBOL_ICONS[sym.kind] || <FileText size={11} />}
         </span>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {sym.name}

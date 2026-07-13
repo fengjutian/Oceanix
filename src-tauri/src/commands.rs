@@ -271,6 +271,7 @@ pub fn search_files(params: serde_json::Value) -> Result<Vec<serde_json::Value>,
         include: params["include"].as_str().map(String::from),
         exclude: params["exclude"].as_str().map(String::from),
         case_sensitive: params.get("case_sensitive").and_then(|v| v.as_bool()).unwrap_or(false),
+        whole_word: params.get("whole_word").and_then(|v| v.as_bool()).unwrap_or(false),
         max_results: max,
     };
 

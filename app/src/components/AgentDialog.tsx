@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { RefreshCw, Folder, Pin, Loader2, Sparkles, X } from "lucide-react";
 import { GlassBtn } from "@oceanix/glass";
 import { AgentWorkspace } from "@oceanix/agent-workspace";
 import { useAgentService } from "../services/agentService";
@@ -21,10 +22,10 @@ function MinimizedBadge({
       alignItems: "center", gap: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
       fontSize: 13, color: "var(--text-primary, #ccc)", userSelect: "none",
     }}>
-      <span>{running ? "⏳" : "✨"}</span>
+      <span>{running ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" } as React.CSSProperties} /> : <Sparkles size={14} />}</span>
       <span>Agent{taskCount > 0 ? ` (${taskCount})` : ""}</span>
       <span onClick={(e) => { e.stopPropagation(); onClose(); }} title="Close agent"
-        style={{ marginLeft: 4, opacity: 0.6, cursor: "pointer" }}>✕</span>
+        style={{ marginLeft: 4, opacity: 0.6, cursor: "pointer" }}><X size={14} /></span>
     </div>
   );
 }
@@ -79,7 +80,7 @@ function SessionsSection({
       {/* Toolbar */}
       <div style={{ display: "flex", gap: 3, padding: "4px 8px" }}>
         <button onClick={onCreate} style={toolbarBtnStyle}>+ New</button>
-        <button onClick={onCreate} style={toolbarBtnStyle}>↻ Refresh</button>
+        <button onClick={onCreate} style={toolbarBtnStyle}><RefreshCw size={12} style={{ marginRight: 2 }} /> Refresh</button>
       </div>
 
       {groups.map((group) => {
@@ -100,7 +101,7 @@ function SessionsSection({
                     borderLeft: isActive ? "2px solid var(--accent, #007acc)" : "2px solid transparent",
                   }}
                 >
-                  <span style={{ flexShrink: 0 }}>{s.pinned ? "📌" : STATUS_ICONS[s.status]}</span>
+                  <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center" }}>{s.pinned ? <Pin size={11} /> : STATUS_ICONS[s.status]}</span>
                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {sessionTitle(s)}
                   </span>
@@ -243,7 +244,7 @@ function RightSidebar({
               {changes && changes.files > 0 ? (
                 <div>
                   <div style={{ fontSize: 12, color: "var(--text-primary)", marginBottom: 8 }}>
-                    📁 {changes.files} file{changes.files > 1 ? "s" : ""} changed
+                    <Folder size={14} style={{ marginRight: 4 }} /> {changes.files} file{changes.files > 1 ? "s" : ""} changed
                   </div>
                   <div style={{ display: "flex", gap: 12, fontSize: 13, marginBottom: 12 }}>
                     <span style={{ color: "#4ec9b0", fontWeight: 600 }}>+{changes.insertions}</span>

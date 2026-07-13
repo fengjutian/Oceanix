@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { GitBranch, ArrowUp, ArrowDown, ArrowDownToLine, GitBranchPlus, Package, ClipboardList, Tag, Cloud, RefreshCw, PlusSquare } from "lucide-react";
 import { gitTagList, gitRemoteList, type GitTagEntry, type GitRemoteEntry } from "../services/api";
 
 export interface GitFileStatus {
@@ -108,12 +109,12 @@ export default function GitPanel({
             >
               {branches.map((b) => (
                 <option key={b.name} value={b.name}>
-                  ⎇ {b.name}{b.isHead ? " *" : ""}
+                  <GitBranch size={12} style={{ marginRight: 2 }} /> {b.name}{b.isHead ? " *" : ""}
                 </option>
               ))}
             </select>
           ) : (
-            <>⎇ {branch}</>
+            <><GitBranch size={12} style={{ marginRight: 2 }} /> {branch}</>
           )}
         </span>
       </div>
@@ -126,36 +127,36 @@ export default function GitPanel({
       <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
         {onPush && (
           <button onClick={onPush} title="Push" style={smallBtn}>
-            ↑
+            <ArrowUp size={14} />
           </button>
         )}
         {onPull && (
           <button onClick={onPull} title="Pull" style={smallBtn}>
-            ↓
+            <ArrowDown size={14} />
           </button>
         )}
         {onFetch && (
           <button onClick={onFetch} title="Fetch (no merge)" style={smallBtn}>
-            ⇣
+            <ArrowDownToLine size={14} />
           </button>
         )}
         <button onClick={() => { setShowNewBranch(!showNewBranch); setNewBranch(""); }} style={smallBtn}>
-          ⎇+
+          <GitBranchPlus size={14} />
         </button>
         <button onClick={() => { setShowStash(!showStash); if (!showStash) onLoadStashes?.(); }} style={smallBtn}>
-          📦
+          <Package size={14} />
         </button>
         <button onClick={() => { setShowLog(!showLog); if (!showLog) onLogLoad?.(); }} style={smallBtn}>
-          📋
+          <ClipboardList size={14} />
         </button>
         <button onClick={async () => { setShowTags(!showTags); if (!showTags) { try { setTags(await gitTagList()); } catch { setTags([]); } } }} style={smallBtn} title="Tags">
-          🏷️
+          <Tag size={14} />
         </button>
         <button onClick={async () => { setShowRemotes(!showRemotes); if (!showRemotes) { try { setRemotes(await gitRemoteList()); } catch { setRemotes([]); } } }} style={smallBtn} title="Remotes">
-          ☁️
+          <Cloud size={14} />
         </button>
         <button onClick={onRefresh} title="Refresh" style={{ ...smallBtn, marginLeft: "auto" }}>
-          ↻
+          <RefreshCw size={14} />
         </button>
       </div>
 
@@ -274,7 +275,7 @@ export default function GitPanel({
             <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
               Changes ({changes.length})
               {onStageAll && (
-                <button onClick={onStageAll} style={{ ...smallBtn, fontSize: 10, padding: "0 6px" }} title="Stage all changes">⊞</button>
+                <button onClick={onStageAll} style={{ ...smallBtn, fontSize: 10, padding: "0 6px" }} title="Stage all changes"><PlusSquare size={14} /></button>
               )}
             </div>
             {changes.map((f) => (
@@ -289,7 +290,7 @@ export default function GitPanel({
             <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
               Untracked ({untracked.length})
               {onStageAll && (
-                <button onClick={onStageAll} style={{ ...smallBtn, fontSize: 10, padding: "0 6px" }} title="Stage all untracked">⊞</button>
+                <button onClick={onStageAll} style={{ ...smallBtn, fontSize: 10, padding: "0 6px" }} title="Stage all untracked"><PlusSquare size={14} /></button>
               )}
             </div>
             {untracked.map((f) => (
@@ -313,7 +314,7 @@ export default function GitPanel({
             {tags.length > 0 ? tags.map((t) => (
               <div key={t.name} style={{ ...rowStyle, fontSize: 11, gap: 6 }}>
                 <span style={{ color: "var(--accent)", fontFamily: "monospace" }}>{t.oid.slice(0, 7)}</span>
-                <span>🏷️ {t.name}</span>
+                <span style={{ color: "var(--accent)" }}><Tag size={11} style={{ marginRight: 2 }} /> {t.name}</span>
               </div>
             )) : <div style={{ fontSize: 11, color: "var(--text-secondary)", padding: "2px 0" }}>No tags</div>}
           </div>
@@ -327,7 +328,7 @@ export default function GitPanel({
             </div>
             {remotes.length > 0 ? remotes.map((r) => (
               <div key={r.name} style={{ ...rowStyle, fontSize: 11, gap: 6 }}>
-                <span style={{ color: "var(--accent)" }}>☁️ {r.name}</span>
+                <span style={{ color: "var(--accent)" }}><Cloud size={11} style={{ marginRight: 2 }} /> {r.name}</span>
                 <span style={{ color: "var(--text-secondary)", fontSize: 10, overflow: "hidden", textOverflow: "ellipsis" }}>{r.url}</span>
               </div>
             )) : <div style={{ fontSize: 11, color: "var(--text-secondary)", padding: "2px 0" }}>No remotes</div>}

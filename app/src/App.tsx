@@ -13,7 +13,7 @@ import OutputPanel from "./components/OutputPanel";
 import SettingsPanel from "./components/SettingsPanel";
 import AgentDialog from "./components/AgentDialog";
 import type { editor } from "monaco-editor";
-import { CommandPalette, Command, filterCommands } from "@oceanix/command-palette";
+import { CommandPalette, type Command } from "@oceanix/command-palette";
 import MenuBar, { buildMenus, MenuActions } from "./components/MenuBar";
 import { useLocale } from "./i18n/LocaleContext";
 import { KeybindingRegistry, KeyBinding } from "@oceanix/keybinding";
@@ -262,12 +262,12 @@ function App() {
   const stateRef = useRef({
     activeTabId, tabs, saveTab, closeTab, openTab, splitVisible, splitDirection,
     setSidebarVisible, setPanelVisible, setTheme, setShowSettings, setSidebarView,
-    setSplitVisible, setSplitDirection,
+    setSplitVisible, setSplitDirection, projectRoot,
   });
   stateRef.current = {
     activeTabId, tabs, saveTab, closeTab, openTab, splitVisible, splitDirection,
     setSidebarVisible, setPanelVisible, setTheme, setShowSettings, setSidebarView,
-    setSplitVisible, setSplitDirection,
+    setSplitVisible, setSplitDirection, projectRoot,
   };
 
   // Register all commands into the global CommandRegistry (VSCode ICommandService pattern).
@@ -413,7 +413,7 @@ function App() {
             import("./components/OutputPanel").then((m) => {
               m.emitOutput(`> ${cmd}`, "info");
               setPanelVisible(true);
-              taskRun(cmd, projectRoot).then((out) => {
+              taskRun(cmd, stateRef.current.projectRoot).then((out) => {
                 m.emitOutput(out, "stdout");
               }).catch((e) => {
                 m.emitOutput(String(e), "stderr");
@@ -732,7 +732,6 @@ function App() {
 
       {showPalette && (
         <CommandPalette
-          commands={quickOpenCommands}
           placeholder="Type a command..."
           onClose={() => setShowPalette(false)}
         />

@@ -35,7 +35,7 @@ export class ExtensionRegistry {
             id: cmd.id,
             label: cmd.label,
             category: cmd.category || "Extension",
-            action: () => {}, // Plugin provides description only
+            handler: () => {}, // Plugin provides description only
           });
         }
       }

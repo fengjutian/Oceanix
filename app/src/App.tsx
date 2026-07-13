@@ -14,7 +14,6 @@ import SettingsPanel from "./components/SettingsPanel";
 import SearchPanel from "./components/SearchPanel";
 import ChatPanel from "./components/ChatPanel";
 import FileExplorer from "./components/FileExplorer";
-import GitPanel from "./components/GitPanel";
 import AgentDialog from "./components/AgentDialog";
 import type { editor } from "monaco-editor";
 import { CommandPalette, type Command } from "@oceanix/command-palette";
@@ -437,12 +436,34 @@ function App() {
     ]);
   }, []); // Register once — handlers use refs/state setters which are stable
 
+  // ─── Command palette integration ──────────────────
+  // Bridge: sync global CommandRegistry entries → @oceanix/command-palette Command[]
+  const [paletteCommands, setPaletteCommands] = useState<Command[]>(() =>
+    commands.getAll().map((e) => ({ id: e.id, label: e.label, category: e.category, keybinding: e.keybinding, handler: e.handler }))
+  );
+  useEffect(() => {
+    const unsub = commands.onDidChange(() => {
+      setPaletteCommands(
+        commands.getAll().map((e) => ({ id: e.id, label: e.label, category: e.category, keybinding: e.keybinding, handler: e.handler }))
+      );
+    });
+    return unsub;
+  }, []);
+
   // ─── Keyboard shortcuts (VSCode KeybindingRegistry) ──
+  // KeybindingRegistry stores key→command-id mappings locally;
+  // when a key fires, it delegates to the global CommandRegistry.
   useEffect(() => {
     const registry = new KeybindingRegistry();
     registry.registerMany(DEFAULT_BINDINGS);
-    // KeybindingRegistry.executeCommand delegates to global CommandRegistry,
-    // so we only need to register key→command-id mappings here.
+
+    // Bridge: every binding delegates to the global CommandRegistry
+    for (const binding of DEFAULT_BINDINGS) {
+      registry.registerCommand(binding.command, () => {
+        commands.execute(binding.command);
+      });
+    }
+
     registry.attach();
     return () => registry.detach();
   }, []);
@@ -754,6 +775,7 @@ function App() {
 
       {showPalette && (
         <CommandPalette
+          commands={paletteCommands}
           placeholder="Type a command..."
           onClose={() => setShowPalette(false)}
         />

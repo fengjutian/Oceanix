@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Command, CommandPaletteProps, getCommandsForPalette } from "./types";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { Command, CommandPaletteProps } from "./types";
 import { filterCommands } from "./fuzzy";
-import { commands as globalCommands } from "@oceanix/commands";
 
 const STYLES: Record<string, React.CSSProperties> = {
   overlay: {
@@ -80,31 +79,8 @@ export function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Resolve commands: explicit list or global registry, with reactivity
-  const [resolvedCommands, setResolvedCommands] = useState<Command[]>(
-    () => getCommandsForPalette(commands)
-  );
-
-  // When explicit commands change, update immediately
-  useEffect(() => {
-    if (commands && commands.length > 0) {
-      setResolvedCommands(commands);
-    } else {
-      setResolvedCommands(getCommandsForPalette());
-    }
-  }, [commands]);
-
-  // Subscribe to global registry changes (for when no explicit commands are passed)
-  useEffect(() => {
-    if (commands && commands.length > 0) return; // Using explicit list, no subscription needed
-    const unsub = globalCommands.onDidChange(() => {
-      setResolvedCommands(getCommandsForPalette());
-    });
-    return unsub;
-  }, [commands]);
-
   // Use fuse.js for better fuzzy search when available, fallback to built-in
-  const filtered = filterCommands(resolvedCommands, query);
+  const filtered = filterCommands(commands, query);
 
   // Group by category
   const grouped = new Map<string, Command[]>();

@@ -1,5 +1,4 @@
 import { KeyBinding, ParsedKey, parseKeyCombo, matchesEvent } from "./key-parser";
-import { commands as globalCommands } from "@oceanix/commands";
 
 /** Registered command handler */
 type CommandHandler = (...args: unknown[]) => void;
@@ -132,15 +131,11 @@ export class KeybindingRegistry {
   }
 
   private executeCommand(id: string): void {
-    // Try global CommandRegistry first, then local fallback
-    const handled = globalCommands.execute(id);
-    if (!handled) {
-      const handler = this.commands.get(id);
-      if (handler) {
-        handler();
-      } else {
-        console.warn(`Command not found: ${id}`);
-      }
+    const handler = this.commands.get(id);
+    if (handler) {
+      handler();
+    } else {
+      console.warn(`Command not found: ${id}`);
     }
   }
 

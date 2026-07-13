@@ -1,29 +1,35 @@
 /**
- * Global command bus — thin re-export of @oceanix/commands.
+ * Global command bus — a lightweight alternative to dispatching synthetic
+ * KeyboardEvents (which may not trigger WebView2 event listeners reliably).
  *
- * @deprecated Import { commands } from "@oceanix/commands" directly.
- *   Kept for backward compatibility with existing code.
+ * Also bridges to the global CommandRegistry from @oceanix/commands.
  *
- * Usage (legacy):
+ * Usage:
+ *   // Register (in App.tsx):
  *   registerCommand("panel.toggle", () => setPanelVisible(v => !v));
- *   executeCommand("panel.toggle");
  *
- * Usage (preferred):
- *   import { commands } from "@oceanix/commands";
- *   commands.register({ id: "panel.toggle", label: "...", handler: () => ... });
- *   commands.execute("panel.toggle");
+ *   // Execute (any component):
+ *   executeCommand("panel.toggle");
  */
 
 import { commands as globalCommands } from "@oceanix/commands";
 
 type CommandFn = (...args: unknown[]) => void;
 
-/** @deprecated Use commands.register() from @oceanix/commands */
+const bus = new Map<string, CommandFn>();
+
 export function registerCommand(id: string, fn: CommandFn): void {
+  bus.set(id, fn);
+  // Also register in global CommandRegistry so CommandPalette can see it
   globalCommands.register({ id, label: id, handler: fn });
 }
 
-/** @deprecated Use commands.execute() from @oceanix/commands */
 export function executeCommand(id: string, ...args: unknown[]): void {
-  globalCommands.execute(id, ...args);
+  // Try local bus first, then global registry
+  const fn = bus.get(id);
+  if (fn) {
+    fn(...args);
+  } else {
+    globalCommands.execute(id, ...args);
+  }
 }

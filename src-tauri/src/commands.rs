@@ -137,7 +137,7 @@ pub fn settings_load() -> Result<serde_json::Value, String> {
         .filter(|p| p.exists())
         .and_then(|p| {
             std::fs::read_to_string(&p).ok().and_then(|content| {
-                serde_json::from_str(&content).ok()
+                serde_json::from_str::<serde_json::Value>(&content).ok()
             })
         });
 

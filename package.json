@@ -19,6 +19,7 @@
     "packages/theme",
     "packages/ai-chat",
     "packages/agent-workspace",
-    "packages/glass"
+    "packages/glass",
+    "packages/commands"
   ]
 }

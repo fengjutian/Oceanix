@@ -1,14 +1,11 @@
 {
-  "name": "@oceanix/keybinding",
+  "name": "@oceanix/commands",
   "version": "0.1.0",
   "private": true,
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@oceanix/commands": "*"
   },
   "peerDependencies": {
     "react": "^19.0.0"

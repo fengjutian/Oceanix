@@ -18,9 +18,9 @@ import MenuBar, { buildMenus, MenuActions } from "./components/MenuBar";
 import { useLocale } from "./i18n/LocaleContext";
 import { KeybindingRegistry, KeyBinding } from "@oceanix/keybinding";
 import { applyTheme, DARK_THEME, LIGHT_THEME } from "@oceanix/theme";
-import { loadSession, saveSession, SessionState, getProjectRoot, writeFile, setProjectRoot, openFolderDialog, openFileDialog, readFile, readFileBase64, openNewWindow, loadSettings, gitBranchName, gitShow, taskRun } from "./services/api";
-import type { EditorSettings } from "./services/api";
-import { registerCommand as registerGlobalCommand } from "./services/commandBus";
+import { loadSession, saveSession, SessionState, getProjectRoot, writeFile, setProjectRoot, openFolderDialog, openFileDialog, readFile, readFileBase64, openNewWindow, initConfiguration, gitBranchName, gitShow, taskRun } from "./services/api";
+import { getConfigurationService } from "./services/configuration";
+import { commands } from "@oceanix/commands";
 import { useAgentOpener } from "./services/agentOpener";
 import { GlassDialog, GlassBtn } from "@oceanix/glass";
 
@@ -63,8 +63,9 @@ function App() {
   // Cursor position for status bar
   const [cursorLine, setCursorLine] = useState(1);
   const [cursorColumn, setCursorColumn] = useState(1);
-  // Editor settings
-  const [editorSettings, setEditorSettings] = useState<EditorSettings | null>(null);
+  // Editor settings — use VSCode-style ConfigurationService (memoized accessor)
+  const configService = getConfigurationService();
+  const getEditorSetting = useCallback(<T,>(key: string) => configService.getValue<T>(key), [configService]);
   // Git branch for status bar
   const [gitBranch, setGitBranch] = useState("main");
 
@@ -228,7 +229,8 @@ function App() {
   const lastSavedContent = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
-    if (editorSettings?.autoSave === "off") return;
+    const autoSave = configService.getValue<string>("editor.autoSave");
+    if (autoSave === "off") return;
     const dirtyTabs = tabs.filter((t) => t.dirty && t.path && !t.path.startsWith("untitled-"));
     for (const tab of dirtyTabs) {
       if (autoSaveTimers.current.has(tab.id)) continue;
@@ -242,7 +244,7 @@ function App() {
         } catch {
         }
         autoSaveTimers.current.delete(tab.id);
-      }, editorSettings?.autoSaveDelay ?? 1500);
+      }, configService.getValue<number>("editor.autoSaveDelay") ?? 1500);
 
       autoSaveTimers.current.set(tab.id, timer);
     }
@@ -255,258 +257,194 @@ function App() {
     }
   }, [tabs]);
 
-  // ─── Quick Open ─────────────────────────────────────
-  const quickOpenCommands = useMemo<Command[]>(() => [
-    {
-      id: "theme.toggle",
-      label: "Toggle Dark/Light Theme",
-      category: "Preferences",
-      keybinding: "Ctrl+K Ctrl+T",
-      action: () => setTheme((t) => (t === "dark" ? "light" : "dark")),
-    },
-    {
-      id: "file.save",
-      label: "Save",
-      category: "File",
-      keybinding: "Ctrl+S",
-      action: () => {
-        if (!activeTabId) return;
-        const tab = tabs.find((t) => t.id === activeTabId);
-        if (tab && tab.path && !tab.path.startsWith("untitled-")) {
-          writeFile(tab.path, tab.content).catch(() => {});
-        }
-        saveTab(activeTabId);
+  // ─── Global Command Registry + Keyboard Shortcuts ──
+  // Ref-based state accessor so command handlers always see latest values
+  const stateRef = useRef({
+    activeTabId, tabs, saveTab, closeTab, openTab, splitVisible, splitDirection,
+    setSidebarVisible, setPanelVisible, setTheme, setShowSettings, setSidebarView,
+    setSplitVisible, setSplitDirection,
+  });
+  stateRef.current = {
+    activeTabId, tabs, saveTab, closeTab, openTab, splitVisible, splitDirection,
+    setSidebarVisible, setPanelVisible, setTheme, setShowSettings, setSidebarView,
+    setSplitVisible, setSplitDirection,
+  };
+
+  // Register all commands into the global CommandRegistry (VSCode ICommandService pattern).
+  // Handlers read latest state via stateRef — no need to re-register on state changes.
+  useEffect(() => {
+    commands.registerMany([
+      {
+        id: "palette.show", label: "Show Command Palette", category: "View",
+        keybinding: "Ctrl+Shift+P",
+        handler: () => setShowPalette(true),
       },
-    },
-    {
-      id: "file.new",
-      label: "New File",
-      category: "File",
-      keybinding: "Ctrl+N",
-      action: () => {
-        const id = `untitled-${Date.now()}`;
-        openTab({ id, path: id, label: "Untitled", language: "plaintext", content: "", dirty: false });
+      {
+        id: "theme.toggle", label: "Toggle Dark/Light Theme", category: "Preferences",
+        keybinding: "Ctrl+K Ctrl+T",
+        handler: () => setTheme((t) => (t === "dark" ? "light" : "dark")),
       },
-    },
-    {
-      id: "tab.close",
-      label: "Close Tab",
-      category: "Tab",
-      keybinding: "Ctrl+W",
-      action: () => activeTabId && closeTab(activeTabId),
-    },
-    {
-      id: "sidebar.toggle",
-      label: "Toggle Sidebar",
-      category: "View",
-      keybinding: "Ctrl+B",
-      action: () => setSidebarVisible((v) => !v),
-    },
-    {
-      id: "panel.toggle",
-      label: "Toggle Panel",
-      category: "View",
-      keybinding: "Ctrl+J",
-      action: () => setPanelVisible((v) => !v),
-    },
-    {
-      id: "editor.gotoLine",
-      label: "Go to Line",
-      category: "Navigation",
-      keybinding: "Ctrl+G",
-      action: () => {
-        editorRef.current?.getAction("editor.action.gotoLine")?.run();
+      {
+        id: "file.save", label: "Save", category: "File", keybinding: "Ctrl+S",
+        handler: () => {
+          const s = stateRef.current;
+          if (!s.activeTabId) return;
+          const tab = s.tabs.find((t) => t.id === s.activeTabId);
+          if (tab && tab.path && !tab.path.startsWith("untitled-")) {
+            writeFile(tab.path, tab.content).catch(() => {});
+          }
+          s.saveTab(s.activeTabId);
+        },
       },
-    },
-    {
-      id: "editor.format",
-      label: "Format Document",
-      category: "Editor",
-      keybinding: "Shift+Alt+F",
-      action: () => {
-        editorRef.current?.getAction("editor.action.formatDocument")?.run();
+      {
+        id: "file.new", label: "New File", category: "File", keybinding: "Ctrl+N",
+        handler: () => {
+          const id = `untitled-${Date.now()}`;
+          stateRef.current.openTab({ id, path: id, label: "Untitled", language: "plaintext", content: "", dirty: false });
+        },
       },
-    },
-    {
-      id: "settings.open",
-      label: "Open Settings",
-      category: "Preferences",
-      keybinding: "Ctrl+,",
-      action: () => setShowSettings(true),
-    },
-    {
-      id: "markdown.preview",
-      label: "Toggle Markdown Preview",
-      category: "View",
-      keybinding: "Ctrl+Shift+V",
-      action: () => editorHandleRef.current?.toggleMarkdownPreview(),
-    },
-    {
-      id: "git.showDiff",
-      label: "Show Git Diff",
-      category: "Git",
-      keybinding: "Ctrl+Shift+D",
-      action: async () => {
-        if (!activeTabId) return;
-        const tab = tabs.find((t) => t.id === activeTabId);
-        if (!tab || tab.path.startsWith("untitled-")) return;
-        try {
-          const original = await gitShow(tab.path);
-          editorHandleRef.current?.openGitDiff(original);
-        } catch {
-          // File not in HEAD yet (untracked/new) — show empty original
-          editorHandleRef.current?.openGitDiff("");
-        }
-      },
-    },
-    {
-      id: "git.toggleBlame",
-      label: "Toggle Git Blame Annotations",
-      category: "Git",
-      action: () => editorHandleRef.current?.toggleBlame(),
-    },
-    {
-      id: "editor.splitRight",
-      label: "Split Editor Right",
-      category: "View",
-      keybinding: "Ctrl+\\",
-      action: () => {
-        if (splitVisible && splitDirection === "horizontal") {
-          setSplitVisible(false);
-        } else {
-          setSplitVisible(true);
-          setSplitDirection("horizontal");
-        }
-      },
-    },
-    {
-      id: "editor.splitDown",
-      label: "Split Editor Down",
-      category: "View",
-      keybinding: "Ctrl+K Ctrl+\\",
-      action: () => {
-        if (splitVisible && splitDirection === "vertical") {
-          setSplitVisible(false);
-        } else {
-          setSplitVisible(true);
-          setSplitDirection("vertical");
-        }
-      },
-    },
-    {
-      id: "search.global",
-      label: "Global Search",
-      category: "Search",
-      keybinding: "Ctrl+Shift+F",
-      action: () => setSidebarView("search"),
-    },
-    {
-      id: "editor.goToReferences",
-      label: "Go to References",
-      category: "Navigation",
-      keybinding: "Shift+F12",
-      action: () => {
-        editorRef.current?.getAction("editor.action.goToReferences")?.run();
-      },
-    },
-    {
-      id: "editor.toggleBreakpoint",
-      label: "Toggle Breakpoint",
-      category: "Debug",
-      keybinding: "F9",
-      action: () => editorHandleRef.current?.toggleBreakpoint(),
-    },
-    {
-      id: "task.run",
-      label: "Run Task...",
-      category: "Task",
-      action: () => {
-        const cmd = window.prompt("Enter shell command:");
-        if (cmd) {
-          import("./components/OutputPanel").then((m) => {
-            m.emitOutput(`> ${cmd}`, "info");
-            setPanelVisible(true);
-            taskRun(cmd, projectRoot).then((out) => {
-              m.emitOutput(out, "stdout");
-            }).catch((e) => {
-              m.emitOutput(String(e), "stderr");
-            });
+      {
+        id: "file.openFolder", label: "Open Folder", category: "File", keybinding: "Ctrl+O",
+        handler: () => {
+          openFolderDialog().then((folder) => {
+            if (folder) setFolderChoicePath(folder);
           });
-        }
+        },
       },
-    },
-    {
-      id: "agent.newSession",
-      label: "Agent: New Session",
-      category: "Agent",
-      action: () => {
-        agentOpenerRef.current.open();
+      {
+        id: "file.openFile", label: "Open File", category: "File",
+        handler: () => {
+          openFileDialog().then((file) => {
+            if (file) setFileChoicePath(file);
+          });
+        },
       },
-    },
-  ], [activeTabId, saveTab, closeTab, openTab]);
+      {
+        id: "tab.close", label: "Close Tab", category: "Tab", keybinding: "Ctrl+W",
+        handler: () => {
+          const s = stateRef.current;
+          if (s.activeTabId) s.closeTab(s.activeTabId);
+        },
+      },
+      {
+        id: "sidebar.toggle", label: "Toggle Sidebar", category: "View", keybinding: "Ctrl+B",
+        handler: () => setSidebarVisible((v) => !v),
+      },
+      {
+        id: "panel.toggle", label: "Toggle Panel", category: "View", keybinding: "Ctrl+J",
+        handler: () => setPanelVisible((v) => !v),
+      },
+      {
+        id: "settings.open", label: "Open Settings", category: "Preferences", keybinding: "Ctrl+,",
+        handler: () => setShowSettings(true),
+      },
+      {
+        id: "editor.gotoLine", label: "Go to Line", category: "Navigation", keybinding: "Ctrl+G",
+        handler: () => editorRef.current?.getAction("editor.action.gotoLine")?.run(),
+      },
+      {
+        id: "editor.format", label: "Format Document", category: "Editor", keybinding: "Shift+Alt+F",
+        handler: () => editorRef.current?.getAction("editor.action.formatDocument")?.run(),
+      },
+      {
+        id: "editor.goToReferences", label: "Go to References", category: "Navigation", keybinding: "Shift+F12",
+        handler: () => editorRef.current?.getAction("editor.action.goToReferences")?.run(),
+      },
+      {
+        id: "editor.toggleBreakpoint", label: "Toggle Breakpoint", category: "Debug", keybinding: "F9",
+        handler: () => editorHandleRef.current?.toggleBreakpoint(),
+      },
+      {
+        id: "markdown.preview", label: "Toggle Markdown Preview", category: "View", keybinding: "Ctrl+Shift+V",
+        handler: () => editorHandleRef.current?.toggleMarkdownPreview(),
+      },
+      {
+        id: "git.showDiff", label: "Show Git Diff", category: "Git", keybinding: "Ctrl+Shift+D",
+        handler: async () => {
+          const s = stateRef.current;
+          if (!s.activeTabId) return;
+          const tab = s.tabs.find((t) => t.id === s.activeTabId);
+          if (!tab || tab.path.startsWith("untitled-")) return;
+          try {
+            const original = await gitShow(tab.path);
+            editorHandleRef.current?.openGitDiff(original);
+          } catch {
+            editorHandleRef.current?.openGitDiff("");
+          }
+        },
+      },
+      {
+        id: "git.toggleBlame", label: "Toggle Git Blame Annotations", category: "Git",
+        handler: () => editorHandleRef.current?.toggleBlame(),
+      },
+      {
+        id: "editor.splitRight", label: "Split Editor Right", category: "View", keybinding: "Ctrl+\\",
+        handler: () => {
+          const s = stateRef.current;
+          if (s.splitVisible && s.splitDirection === "horizontal") {
+            s.setSplitVisible(false);
+          } else {
+            s.setSplitVisible(true);
+            s.setSplitDirection("horizontal");
+          }
+        },
+      },
+      {
+        id: "editor.splitDown", label: "Split Editor Down", category: "View", keybinding: "Ctrl+K Ctrl+\\",
+        handler: () => {
+          const s = stateRef.current;
+          if (s.splitVisible && s.splitDirection === "vertical") {
+            s.setSplitVisible(false);
+          } else {
+            s.setSplitVisible(true);
+            s.setSplitDirection("vertical");
+          }
+        },
+      },
+      {
+        id: "search.global", label: "Global Search", category: "Search", keybinding: "Ctrl+Shift+F",
+        handler: () => setSidebarView("search"),
+      },
+      {
+        id: "task.run", label: "Run Task...", category: "Task",
+        handler: () => {
+          const cmd = window.prompt("Enter shell command:");
+          if (cmd) {
+            import("./components/OutputPanel").then((m) => {
+              m.emitOutput(`> ${cmd}`, "info");
+              setPanelVisible(true);
+              taskRun(cmd, projectRoot).then((out) => {
+                m.emitOutput(out, "stdout");
+              }).catch((e) => {
+                m.emitOutput(String(e), "stderr");
+              });
+            });
+          }
+        },
+      },
+      {
+        id: "agent.newSession", label: "Agent: New Session", category: "Agent",
+        handler: () => agentOpenerRef.current.open(),
+      },
+    ]);
+  }, []); // Register once — handlers use refs/state setters which are stable
 
-  // Always holds the latest commands so the keybinding registry
-  // never needs to be rebuilt when command actions change.
-  const commandsRef = useRef(quickOpenCommands);
-  commandsRef.current = quickOpenCommands;
-
-  // ─── Keyboard shortcuts ─────────────────────────────
+  // ─── Keyboard shortcuts (VSCode KeybindingRegistry) ──
   useEffect(() => {
     const registry = new KeybindingRegistry();
     registry.registerMany(DEFAULT_BINDINGS);
-    registry.registerCommand("palette.show", () => setShowPalette(true));
-
-    // Route every default binding through a stable handler that
-    // reads the latest commands via ref — never stale.
-    const handler = (cmdId: string) => {
-      const cmd = commandsRef.current.find((c) => c.id === cmdId);
-      cmd?.action();
-    };
-
-    // file.openFolder needs a direct handler — it's not in quickOpenCommands
-    const openFolderHandler = () => {
-      openFolderDialog().then((folder) => {
-        if (folder) setFolderChoicePath(folder);
-      });
-    };
-    registry.registerCommand("file.openFolder", openFolderHandler);
-
-    for (const binding of DEFAULT_BINDINGS) {
-      if (binding.command !== "palette.show" && binding.command !== "file.openFolder") {
-        registry.registerCommand(binding.command, () => handler(binding.command));
-      }
-    }
-
-    // Also register on the global command bus so components like
-    // WelcomePage can trigger commands without fake KeyboardEvents
-    // (which are unreliable in Tauri WebView2).
-    registerGlobalCommand("file.new", () => handler("file.new"));
-    registerGlobalCommand("file.openFolder", openFolderHandler);
-    registerGlobalCommand("file.openFile", () => {
-      openFileDialog().then((file) => {
-        if (file) setFileChoicePath(file);
-      });
-    });
-    registerGlobalCommand("panel.toggle", () => handler("panel.toggle"));
-    registerGlobalCommand("palette.show", () => handler("palette.show"));
-    registerGlobalCommand("theme.toggle", () => handler("theme.toggle"));
-    registerGlobalCommand("settings.open", () => handler("settings.open"));
-    registerGlobalCommand("agent.newSession", () => {
-      agentOpenerRef.current.open();
-    });
-
+    // KeybindingRegistry.executeCommand delegates to global CommandRegistry,
+    // so we only need to register key→command-id mappings here.
     registry.attach();
     return () => registry.detach();
-  }, []); // Empty deps — registry created once, never reattached
-
-  // ─── Theme ──────────────────────────────────────────
+  }, []);
   useEffect(() => {
     applyTheme(theme === "dark" ? DARK_THEME : LIGHT_THEME);
   }, [theme]);
 
   // ─── Load settings & git branch ────────────────────
   useEffect(() => {
-    loadSettings().then(setEditorSettings).catch(() => {});
+    initConfiguration().catch(() => {});
     gitBranchName().then(setGitBranch).catch(() => {});
   }, []);
 
@@ -690,7 +628,6 @@ function App() {
                       onContentChange={updateContent} onSave={saveTab}
                       editorRef={editorRef} projectRoot={projectRoot}
                       onCursorChange={(line, col) => { setCursorLine(line); setCursorColumn(col); }}
-                      editorSettings={editorSettings}
                     />
                   </Panel>
                   <PanelResizeHandle className="resize-handle" />
@@ -706,7 +643,6 @@ function App() {
                         prev.map((t) => (t.id === id ? { ...t, dirty: false } : t))
                       )}
                       editorRef={splitEditorRef} projectRoot={projectRoot}
-                      editorSettings={editorSettings}
                     />
                   </Panel>
                 </PanelGroup>
@@ -718,7 +654,6 @@ function App() {
                     onContentChange={updateContent} onSave={saveTab}
                     editorRef={editorRef} projectRoot={projectRoot}
                     onCursorChange={(line, col) => { setCursorLine(line); setCursorColumn(col); }}
-                    editorSettings={editorSettings}
                   />
                 </Panel>
               )}
@@ -788,7 +723,9 @@ function App() {
         currentLine={cursorLine}
         currentColumn={cursorColumn}
         encoding="UTF-8"
-        indentMode={editorSettings?.insertSpaces ? `Spaces: ${editorSettings.tabSize}` : `Tab Size: ${editorSettings?.tabSize ?? 2}`}
+        indentMode={configService.getValue<boolean>("editor.insertSpaces")
+          ? `Spaces: ${configService.getValue<number>("editor.tabSize") ?? 2}`
+          : `Tab Size: ${configService.getValue<number>("editor.tabSize") ?? 2}`}
         language={activeTab?.language || "Plain Text"}
         branch={gitBranch}
       />

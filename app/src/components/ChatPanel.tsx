@@ -6,9 +6,9 @@ import {
   loadConversation,
   saveConversation,
   deleteConversation,
-  loadSettings,
   type ConvMeta,
 } from "../services/api";
+import { getConfigurationService } from "../services/configuration";
 
 const AI_SERVER_URL = "http://127.0.0.1:11435";
 
@@ -82,9 +82,8 @@ export default function ChatPanel({
       .catch(() => {
         if (!cancelled) setHistoryLoaded(true);
       });
-    loadSettings().then((s) => {
-      if (!cancelled && s.aiModel) setAiModel(s.aiModel);
-    }).catch(() => {});
+    const aiModel = getConfigurationService().getValue<string>("ai.model") ?? "deepseek-v4-pro";
+    setAiModel(aiModel);
     return () => { cancelled = true; };
   }, []);
 

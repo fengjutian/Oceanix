@@ -4,7 +4,7 @@ import type { editor } from "monaco-editor";
 import WelcomePage from "./WelcomePage";
 import { aiComplete, lspHover, lspDefinition, lspStart, lspDidOpen, lspDidChange, lspRename, lspCompletion, lspReferences, lspFormatting, gitBlame } from "../services/api";
 import type { GitBlameEntry } from "../services/api";
-import type { EditorSettings } from "../services/api";
+import { getConfigurationService } from "../services/configuration";
 
 const LSP_LANGUAGES = new Set(["rust", "python", "typescript", "typescriptreact", "javascript"]);
 
@@ -93,7 +93,7 @@ interface EditorTabsProps {
   editorRef?: React.MutableRefObject<editor.IStandaloneCodeEditor | null>;
   projectRoot?: string;
   onCursorChange?: (line: number, column: number) => void;
-  editorSettings?: EditorSettings | null;
+  // editorSettings prop removed — use ConfigurationService directly
 }
 
 const EditorTabs = forwardRef((
@@ -110,7 +110,6 @@ const EditorTabs = forwardRef((
     editorRef,
     projectRoot,
     onCursorChange,
-    editorSettings,
   } = props;
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
@@ -126,8 +125,38 @@ const EditorTabs = forwardRef((
   const lspDisposablesRef = useRef<Array<{ dispose: () => void }>>([]);
   const cursorChangeRef = useRef(onCursorChange);
   cursorChangeRef.current = onCursorChange;
-  const settingsRef = useRef(editorSettings);
-  settingsRef.current = editorSettings;
+  const configService = getConfigurationService();
+
+  /** Apply current editor settings to a Monaco instance */
+  const applyEditorSettings = useCallback(
+    (editorInstance: editor.IStandaloneCodeEditor) => {
+      const fontSize = configService.getValue<number>("editor.fontSize") ?? 14;
+      const fontFamily = configService.getValue<string>("editor.fontFamily") ?? "'Cascadia Code', 'Fira Code', monospace";
+      const tabSize = configService.getValue<number>("editor.tabSize") ?? 2;
+      const insertSpaces = configService.getValue<boolean>("editor.insertSpaces") ?? true;
+      const wordWrap = configService.getValue<string>("editor.wordWrap") ?? "off";
+      const minimap = configService.getValue<boolean>("editor.minimap") ?? true;
+      const lineNumbers = configService.getValue<string>("editor.lineNumbers") ?? "on";
+      const renderWhitespace = configService.getValue<string>("editor.renderWhitespace") ?? "selection";
+      const cursorBlinking = configService.getValue<string>("editor.cursorBlinking") ?? "blink";
+      const bracketPairColorization = configService.getValue<boolean>("editor.bracketPairColorization") ?? true;
+
+      editorInstance.updateOptions({
+        fontSize,
+        fontFamily,
+        tabSize,
+        insertSpaces,
+        wordWrap: wordWrap as "off" | "on" | "wordWrapColumn",
+        minimap: { enabled: minimap },
+        lineNumbers: lineNumbers as "on" | "off" | "relative",
+        renderWhitespace: renderWhitespace as "none" | "boundary" | "selection" | "trailing" | "all",
+        cursorBlinking: cursorBlinking as "blink" | "smooth" | "phase" | "expand" | "solid",
+        bracketPairColorization: { enabled: bracketPairColorization },
+        glyphMargin: true,
+      });
+    },
+    [configService],
+  );
   const handleEditorMount: OnMount = useCallback(
     (editorInstance: editor.IStandaloneCodeEditor, monaco: typeof import("monaco-editor")) => {
       monacoRef.current = monaco;
@@ -138,19 +167,8 @@ const EditorTabs = forwardRef((
         cursorChangeRef.current?.(e.position.lineNumber, e.position.column);
       });
 
-      // Apply editor settings
-      const s = settingsRef.current;
-      if (s) {
-        editorInstance.updateOptions({
-          fontSize: s.fontSize,
-          fontFamily: s.fontFamily,
-          tabSize: s.tabSize,
-          insertSpaces: s.insertSpaces,
-          wordWrap: s.wordWrap,
-          minimap: { enabled: s.minimap },
-          glyphMargin: true,
-        });
-      }
+      // Apply editor settings from ConfigurationService
+      applyEditorSettings(editorInstance);
 
       // Breakpoint toggle on gutter click
       editorInstance.onMouseDown((e) => {

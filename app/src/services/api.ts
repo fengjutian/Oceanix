@@ -5,6 +5,25 @@
 
 import { invoke } from "@tauri-apps/api/core";
 
+/**
+ * Initialize the new VSCode-style ConfigurationService.
+ * Call once at app startup (before any getValue/inspect calls).
+ */
+export async function initConfiguration(): Promise<void> {
+  const { registerDefaultConfigurations } = await import("./configuration/configurationDefaults");
+  const { getConfigurationService, ConfigurationService } = await import("./configuration/configurationService");
+  const { tauriPersistence } = await import("./configuration/configurationEditing");
+
+  registerDefaultConfigurations();
+  const svc = getConfigurationService();
+  // Swap the no-op persistence for the real Tauri bridge
+  const realSvc = new ConfigurationService(tauriPersistence);
+  const { setConfigurationService } = await import("./configuration/configurationService");
+  setConfigurationService(realSvc);
+  registerDefaultConfigurations(); // re-register after service swap (idempotent)
+  await realSvc.initialize();
+}
+
 // ─── File I/O ────────────────────────────────────────
 
 export async function readFile(path: string): Promise<string> {
@@ -46,6 +65,10 @@ export async function renameFile(oldPath: string, newPath: string): Promise<void
 
 // ─── Configuration ──────────────────────────────────
 
+/**
+ * @deprecated Use ConfigurationService from "./configuration" instead.
+ * Kept for backward compatibility during migration.
+ */
 export interface EditorSettings {
   theme: "vs-dark" | "vs-light";
   fontSize: number;
@@ -60,12 +83,41 @@ export interface EditorSettings {
   aiModel: string;
 }
 
+/**
+ * @deprecated Use ConfigurationService.getValue() instead.
+ */
 export async function loadSettings(): Promise<EditorSettings> {
-  return invoke("settings_load");
+  return invoke("settings_load").then((raw: any) => {
+    // New Rust API returns { user: {...}, workspace: {...} }
+    // Old API returned flat settings directly
+    const flat = raw.user ?? raw;
+    return {
+      theme: flat.theme ?? "vs-dark",
+      fontSize: flat.fontSize ?? 14,
+      fontFamily: flat.fontFamily ?? "'Cascadia Code', 'Fira Code', monospace",
+      tabSize: flat.tabSize ?? 2,
+      insertSpaces: flat.insertSpaces ?? true,
+      wordWrap: flat.wordWrap ?? "off",
+      minimap: flat.minimap ?? true,
+      autoSave: flat.autoSave ?? "off",
+      autoSaveDelay: flat.autoSaveDelay ?? 1000,
+      aiModel: flat.aiModel ?? "deepseek-v4-pro",
+    } as EditorSettings;
+  });
 }
 
+/**
+ * @deprecated Use ConfigurationService.updateValue() instead.
+ */
 export async function saveSettings(settings: Partial<EditorSettings>): Promise<void> {
-  return invoke("settings_save", { settings });
+  // Map old flat keys to new dotted keys
+  const mapped: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(settings)) {
+    if (key === "theme") mapped["appearance.theme"] = value;
+    else if (key === "aiModel") mapped["ai.model"] = value;
+    else mapped[`editor.${key}`] = value;
+  }
+  return invoke("settings_save", { target: "user", settings: mapped });
 }
 
 // ─── Session ─────────────────────────────────────────

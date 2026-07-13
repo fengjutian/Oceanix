@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Command, CommandPaletteProps } from "./types";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Command, CommandPaletteProps, getCommandsForPalette } from "./types";
 import { filterCommands } from "./fuzzy";
 
 const STYLES: Record<string, React.CSSProperties> = {
@@ -79,8 +79,11 @@ export function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Resolve commands: explicit list or global registry
+  const resolvedCommands = useMemo(() => getCommandsForPalette(commands), [commands]);
+
   // Use fuse.js for better fuzzy search when available, fallback to built-in
-  const filtered = filterCommands(commands, query);
+  const filtered = filterCommands(resolvedCommands, query);
 
   // Group by category
   const grouped = new Map<string, Command[]>();
@@ -110,7 +113,7 @@ export function CommandPalette({
 
   const executeCommand = useCallback(
     (cmd: Command) => {
-      cmd.action();
+      cmd.handler();
       onExecute?.(cmd);
       onClose();
     },

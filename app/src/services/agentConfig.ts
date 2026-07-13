@@ -1,19 +1,22 @@
 /**
- * Agent configuration — persisted per-session or globally.
+ * Agent configuration (deprecated) — now unified with ConfigurationService.
  *
- * Pattern: VSCode's chatSessions extension point contributions
- * (capabilities, inputPlaceholder, welcomeMessage) mapped to
- * user-facing settings (model, temperature, maxSteps, systemPrompt).
+ * @deprecated Use ConfigurationService.getValue("ai.*") instead.
+ *   - maxSteps     → getConfigurationService().getValue<number>("ai.maxSteps")
+ *   - temperature  → getConfigurationService().getValue<number>("ai.temperature")
+ *   - systemPrompt → getConfigurationService().getValue<string>("ai.systemPrompt")
+ *   - model        → getConfigurationService().getValue<string>("ai.chatModel")
+ *
+ * This file is kept for backward compatibility. All functions delegate
+ * to ConfigurationService now.
  */
 
+import { getConfigurationService, ConfigurationTarget } from "./configuration";
+
 export interface AgentConfig {
-  /** Maximum agent execution steps (1-50). Default: 10 */
   maxSteps: number;
-  /** LLM temperature (0-2). Default: 0.7 */
   temperature: number;
-  /** System prompt override (empty = use default). */
   systemPrompt: string;
-  /** Model ID override (empty = auto-select). */
   model: string;
 }
 
@@ -24,30 +27,26 @@ export const DEFAULT_CONFIG: AgentConfig = {
   model: "",
 };
 
-const STORAGE_KEY = "oceanix-agent-config";
-
+/**
+ * @deprecated Use getConfigurationService().getValue() instead.
+ */
 export function loadConfig(): AgentConfig {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        maxSteps: clamp(parsed.maxSteps ?? DEFAULT_CONFIG.maxSteps, 1, 50),
-        temperature: clamp(parsed.temperature ?? DEFAULT_CONFIG.temperature, 0, 2),
-        systemPrompt: typeof parsed.systemPrompt === "string" ? parsed.systemPrompt : "",
-        model: typeof parsed.model === "string" ? parsed.model : "",
-      };
-    }
-  } catch { /* ignore */ }
-  return { ...DEFAULT_CONFIG };
+  const svc = getConfigurationService();
+  return {
+    maxSteps: svc.getValue<number>("ai.maxSteps") ?? DEFAULT_CONFIG.maxSteps,
+    temperature: svc.getValue<number>("ai.temperature") ?? DEFAULT_CONFIG.temperature,
+    systemPrompt: svc.getValue<string>("ai.systemPrompt") ?? DEFAULT_CONFIG.systemPrompt,
+    model: svc.getValue<string>("ai.chatModel") ?? DEFAULT_CONFIG.model,
+  };
 }
 
+/**
+ * @deprecated Use getConfigurationService().updateValue() instead.
+ */
 export function saveConfig(config: AgentConfig): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-  } catch { /* ignore quota */ }
-}
-
-function clamp(v: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, Number(v) || min));
+  const svc = getConfigurationService();
+  svc.updateValue("ai.maxSteps", config.maxSteps, ConfigurationTarget.USER);
+  svc.updateValue("ai.temperature", config.temperature, ConfigurationTarget.USER);
+  svc.updateValue("ai.systemPrompt", config.systemPrompt, ConfigurationTarget.USER);
+  svc.updateValue("ai.chatModel", config.model, ConfigurationTarget.USER);
 }

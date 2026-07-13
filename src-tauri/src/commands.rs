@@ -122,35 +122,92 @@ pub fn settings_load() -> Result<serde_json::Value, String> {
         .join("oceanix")
         .join("settings.json");
 
-    if config_dir.exists() {
+    let user_settings = if config_dir.exists() {
         let content = std::fs::read_to_string(&config_dir)
             .map_err(|e| format!("Read settings: {e}"))?;
-        serde_json::from_str(&content).map_err(|e| format!("Parse settings: {e}"))
+        serde_json::from_str(&content).unwrap_or(serde_json::json!({}))
     } else {
-        Ok(serde_json::json!({
-            "theme": "vs-dark",
-            "fontSize": 14,
-            "fontFamily": "'Cascadia Code', 'Fira Code', monospace",
-            "tabSize": 2,
-            "insertSpaces": true,
-            "wordWrap": "off",
-            "minimap": true,
-            "autoSave": "off",
-            "autoSaveDelay": 1000,
-            "aiModel": "deepseek-v4-pro"
-        }))
-    }
+        serde_json::json!({})
+    };
+
+    // Try to load workspace settings from <cwd>/.oceanix/settings.json
+    let workspace_settings = std::env::current_dir()
+        .ok()
+        .map(|cwd| cwd.join(".oceanix").join("settings.json"))
+        .filter(|p| p.exists())
+        .and_then(|p| {
+            std::fs::read_to_string(&p).ok().and_then(|content| {
+                serde_json::from_str(&content).ok()
+            })
+        });
+
+    Ok(serde_json::json!({
+        "user": user_settings,
+        "workspace": workspace_settings,
+    }))
 }
 
 #[tauri::command]
-pub fn settings_save(settings: serde_json::Value) -> Result<(), String> {
-    let config_dir = dirs::config_dir()
-        .ok_or("No config dir")?
-        .join("oceanix");
-    std::fs::create_dir_all(&config_dir).map_err(|e| format!("CreateDir: {e}"))?;
-    let content = serde_json::to_string_pretty(&settings).unwrap();
-    std::fs::write(config_dir.join("settings.json"), content)
-        .map_err(|e| format!("Write settings: {e}"))
+pub fn settings_save(target: String, settings: serde_json::Value) -> Result<(), String> {
+    let settings_obj = settings.as_object().ok_or("settings must be a JSON object")?;
+
+    match target.as_str() {
+        "user" => {
+            let config_dir = dirs::config_dir()
+                .ok_or("No config dir")?
+                .join("oceanix");
+            std::fs::create_dir_all(&config_dir).map_err(|e| format!("CreateDir: {e}"))?;
+            let settings_path = config_dir.join("settings.json");
+
+            // Read-merge-write: load existing, merge partial, write back
+            let mut existing = if settings_path.exists() {
+                let content = std::fs::read_to_string(&settings_path)
+                    .map_err(|e| format!("Read settings: {e}"))?;
+                serde_json::from_str::<serde_json::Value>(&content)
+                    .unwrap_or(serde_json::json!({}))
+            } else {
+                serde_json::json!({})
+            };
+
+            if let Some(existing_obj) = existing.as_object_mut() {
+                for (k, v) in settings_obj {
+                    existing_obj.insert(k.clone(), v.clone());
+                }
+            }
+
+            let content = serde_json::to_string_pretty(&existing).unwrap();
+            std::fs::write(&settings_path, content)
+                .map_err(|e| format!("Write settings: {e}"))
+        }
+        "workspace" => {
+            let cwd = std::env::current_dir()
+                .map_err(|e| format!("Get cwd: {e}"))?;
+            let oceanix_dir = cwd.join(".oceanix");
+            std::fs::create_dir_all(&oceanix_dir).map_err(|e| format!("CreateDir: {e}"))?;
+            let settings_path = oceanix_dir.join("settings.json");
+
+            // Read-merge-write for workspace too
+            let mut existing = if settings_path.exists() {
+                let content = std::fs::read_to_string(&settings_path)
+                    .map_err(|e| format!("Read settings: {e}"))?;
+                serde_json::from_str::<serde_json::Value>(&content)
+                    .unwrap_or(serde_json::json!({}))
+            } else {
+                serde_json::json!({})
+            };
+
+            if let Some(existing_obj) = existing.as_object_mut() {
+                for (k, v) in settings_obj {
+                    existing_obj.insert(k.clone(), v.clone());
+                }
+            }
+
+            let content = serde_json::to_string_pretty(&existing).unwrap();
+            std::fs::write(&settings_path, content)
+                .map_err(|e| format!("Write settings: {e}"))
+        }
+        other => Err(format!("Unknown settings target: {other} (must be 'user' or 'workspace')")),
+    }
 }
 
 // ─── Session ─────────────────────────────────────────
